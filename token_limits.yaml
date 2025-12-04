@@ -1,0 +1,71 @@
+chat:
+  databricks-gpt-oss-120b:
+    ITPM_limit: 200000
+    OTPM_limit: 10000
+    QPH_limit: null
+
+  databricks-gpt-oss-20b:
+    ITPM_limit: 200000
+    OTPM_limit: 10000
+    QPH_limit: null
+
+  databricks-gemma-3-12b:
+    ITPM_limit: 200000
+    OTPM_limit: 10000
+    QPH_limit: 7200
+
+  databricks-llama-4-maverick:
+    ITPM_limit: 200000
+    OTPM_limit: 10000
+    QPH_limit: 2400
+
+  databricks-meta-llama-3-3-70b-instruct:
+    ITPM_limit: 200000
+    OTPM_limit: 10000
+    QPH_limit: 2400
+
+  databricks-meta-llama-3-1-8b-instruct:
+    ITPM_limit: 200000
+    OTPM_limit: 10000
+    QPH_limit: 7200
+
+  databricks-meta-llama-3-1-405b-instruct:
+    ITPM_limit: 5000
+    OTPM_limit: 500
+    QPH_limit: 1200
+
+  databricks-claude-3-7-sonnet:
+    ITPM_limit: 50000
+    OTPM_limit: 5000
+    QPH_limit: null
+
+  databricks-claude-opus-4:
+    ITPM_limit: 50000
+    OTPM_limit: 5000
+    QPH_limit: null
+
+  databricks-claude-sonnet-4:
+    ITPM_limit: 50000
+    OTPM_limit: 5000
+    QPH_limit: null
+
+  databricks-claude-opus-4-1:
+    ITPM_limit: 50000
+    OTPM_limit: 5000
+    QPH_limit: null
+
+  databricks-claude-sonnet-4-5:
+    ITPM_limit: 50000
+    OTPM_limit: 5000
+    QPH_limit: null
+
+embeddings:
+  databricks-gte-large-en:
+    ITPM_limit: null
+    OTPM_limit: null
+    QPH_limit: 540000
+
+  databricks-bge-large-en:
+    ITPM_limit: null
+    OTPM_limit: null
+    QPH_limit: 2160000
