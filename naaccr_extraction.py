@@ -136,10 +136,10 @@ def validate_tool_call(tool_call: ChatCompletionMessageToolCall, data_model: typ
     return parsed
 
 def run_extraction(
-        notes_df: pd.DataFrame,
-        config: ExtractionConfig,
-        current_index: int = 0,
-        pbar = None
+    notes_df: pd.DataFrame,
+    config: ExtractionConfig,
+    current_index: int = 0,
+    pbar = None
 ):
     if pbar is None:
         pbar = tqdm(total=config.end_index - config.start_index, position=0, desc="Patients")
@@ -171,8 +171,8 @@ def run_extraction(
             pbar.update(1)
 
 def run_extraction_batches(
-        notes_db: spark.DataFrame,
-        config: ExtractionConfig
+    notes_db: spark.DataFrame,
+    config: ExtractionConfig
 ):
     if config.batch_size is None:
         raise ValueError("Batch size must be set in ExtractionConfig to run in batch mode.")
