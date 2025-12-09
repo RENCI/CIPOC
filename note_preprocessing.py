@@ -67,12 +67,12 @@ def select_notes_by_note_type(row: pd.Series, note_column: str, note_types_to_ke
     return kept_notes
 
 def filter_notes(
-        row: pd.Series,
-        note_column: str,
-        days_before_after: tuple[int, int] | None = None,
-        date_of_diagnosis_column: str = "DATE_OF_DIAGNOSIS_N390",
-        note_types: list[str] | None = None
-    ) -> str:
+    row: pd.Series,
+    note_column: str,
+    days_before_after: tuple[int, int] | None = None,
+    date_of_diagnosis_column: str = "DATE_OF_DIAGNOSIS_N390",
+    note_types: list[str] | None = None
+) -> str:
     if days_before_after is None and note_types is None:
         raise Exception("No filter criteria given. Please provide date constraints or note types")
 
