@@ -227,7 +227,7 @@ def run_extraction_batch_filter(
     for patient_batch in batch_patients(notes_db, batch_size=config.batch_size):
         batch_df = notes_db.select(["PERSON_ID", "MRN", config.note_column, config.date_of_diagnosis_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
         batch_df = batch_df.astype(str)
-        batch_df["KEPT_NOTES"] = [note_filter.apply_filters(notes, date) for notes, date in zip(batch_df.pop(config.note_column), batch_df.pop(config.date_of_diagnosis_column)]
+        batch_df["KEPT_NOTES"] = [note_filter.apply_filters(notes, date) for notes, date in zip(batch_df.pop(config.note_column), batch_df.pop(config.date_of_diagnosis_column))]
         notes_df = pd.concat((notes_df, batch_df))
         
     run_extraction(notes_df=notes_df, config=config)
