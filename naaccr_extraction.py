@@ -194,7 +194,7 @@ def run_extraction_batches(
     
     pbar = tqdm(total=config.end_index - config.start_index, position=0, desc="Patients")
     current_index = 0
-    for patient_batch in batch_patients(patient_ids, notes_db, batch_size=config.batch_size):
+    for patient_batch in batch_patients(patient_ids=patient_ids, batch_size=config.batch_size):
         # Check if whole batch is out of bounds to reduce calls to db
         if current_index >= config.end_index:
             break
@@ -238,7 +238,7 @@ def run_extraction_batch_filter(
         config.end_index = len(patient_ids)
     
     notes_df = pd.DataFrame(columns=["PERSON_ID", "MRN", "KEPT_NOTES"])
-    for patient_batch in batch_patients(patient_ids=patient_ids, db=notes_db, batch_size=config.batch_size):
+    for patient_batch in batch_patients(patient_ids=patient_ids, batch_size=config.batch_size):
         batch_df = notes_db.select(["PERSON_ID", "MRN", config.note_column, config.date_of_diagnosis_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
         batch_df = batch_df.astype(str)
         batch_df["KEPT_NOTES"] = [note_filter.apply_filters(notes, date) for notes, date in zip(batch_df.pop(config.note_column), batch_df.pop(config.date_of_diagnosis_column))]
@@ -259,7 +259,7 @@ def get_patient_ids(db: spark.DataFrame, config: ExtractionConfig | None = None,
 
     return patient_ids
 
-def batch_patients(patient_ids: list, db: spark.DataFrame, batch_size=100):
+def batch_patients(patient_ids: list, batch_size=100):
     batch_start = 0
     while batch_start < len(patient_ids):
         batch_end = batch_start + batch_size if batch_start + batch_size < len(patient_ids) else len(patient_ids)
