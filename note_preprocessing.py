@@ -1,6 +1,5 @@
 import re
 from datetime import datetime, timedelta
-from typing import TypedDict, NotRequired
 import pandas as pd
 
 
@@ -34,7 +33,7 @@ def select_notes_within_date_of_diagnosis(row: pd.Series, note_column: str, days
     date_of_diagnosis = datetime.strptime(date_of_diagnosis, "%Y%m%d")
     date_of_diagnosis = date_of_diagnosis.date()
 
-    split_list = split_notes_at_separator(row[note_column])
+    split_list = split_notes_at_separator(row[note_column]) # type: ignore
     split_dicts = split_notes_to_dict(split_list)
 
     notes_list = []
@@ -53,7 +52,7 @@ def select_notes_within_date_of_diagnosis(row: pd.Series, note_column: str, days
     return kept_notes
 
 def select_notes_by_note_type(row: pd.Series, note_column: str, note_types_to_keep: list[str]) -> str:
-    split_list = split_notes_at_separator(row[note_column])
+    split_list = split_notes_at_separator(row[note_column]) # type: ignore
     split_dicts = split_notes_to_dict(split_list)
 
     notes_list = []
@@ -76,7 +75,7 @@ def filter_notes(
     if days_before_after is None and note_types is None:
         raise Exception("No filter criteria given. Please provide date constraints or note types")
 
-    split_list = split_notes_at_separator(row[note_column])
+    split_list = split_notes_at_separator(row[note_column]) # type: ignore
     split_dicts = split_notes_to_dict(split_list)
 
     if days_before_after is not None:
