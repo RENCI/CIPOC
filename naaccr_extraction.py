@@ -16,6 +16,7 @@ from dataclasses import dataclass
 
 from llm_client import ChatClient
 from note_filter import NoteFilter
+from utils import get_model_run_state
 
 
 class NAACCRVariable(BaseModel):
@@ -28,6 +29,7 @@ class NAACCRVariable(BaseModel):
 
 @dataclass
 class ExtractionConfig:
+    model: str
     target_vars: list | pd.Series
     target_df: pd.DataFrame
     note_column: str
@@ -179,14 +181,20 @@ def run_extraction(
 
 def run_extraction_batches(
     notes_db: spark.DataFrame,
-    config: ExtractionConfig
+    config: ExtractionConfig,
+    resume_run: bool = False
 ):
     if config.batch_size is None:
         raise ValueError("Batch size must be set in ExtractionConfig to run in batch mode.")
     
+    patient_ids = get_patient_ids(db=notes_db, config=config, resume_run=resume_run)
+    if resume_run:
+        config.start_index = 0
+        config.end_index = len(patient_ids)
+    
     pbar = tqdm(total=config.end_index - config.start_index, position=0, desc="Patients")
     current_index = 0
-    for patient_batch in batch_patients(notes_db, batch_size=config.batch_size):
+    for patient_batch in batch_patients(patient_ids, notes_db, batch_size=config.batch_size):
         # Check if whole batch is out of bounds to reduce calls to db
         if current_index >= config.end_index:
             break
@@ -195,7 +203,7 @@ def run_extraction_batches(
             current_index += config.batch_size
             continue
 
-        notes_df = notes_db.select(["PERSON_ID", "MRN", config.note_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
+        notes_df = notes_db.select(["PERSON_ID", "MRN", config.note_column, config.date_of_diagnosis_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
         note_filter = NoteFilter(
             note_types_to_keep=config.note_types,
             days_before=config.note_days_before,
@@ -210,7 +218,8 @@ def run_extraction_batches(
 
 def run_extraction_batch_filter(
     notes_db: spark.DataFrame,
-    config: ExtractionConfig
+    config: ExtractionConfig,
+    resume_run: bool = False
 ):
     if config.batch_size is None:
         raise ValueError("Batch size must be set in ExtractionConfig to run in batch mode.")
@@ -222,22 +231,39 @@ def run_extraction_batch_filter(
         reference_date_format=config.date_of_diagnosis_format,
         note_date_format=config.note_date_format
     )
+
+    patient_ids = get_patient_ids(db=notes_db, config=config, resume_run=resume_run)
+    if resume_run:
+        config.start_index = 0
+        config.end_index = len(patient_ids)
     
     notes_df = pd.DataFrame(columns=["PERSON_ID", "MRN", "KEPT_NOTES"])
-    for patient_batch in batch_patients(notes_db, batch_size=config.batch_size):
-        batch_df = notes_db.select(["PERSON_ID", "MRN", config.note_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
+    for patient_batch in batch_patients(patient_ids=patient_ids, db=notes_db, batch_size=config.batch_size):
+        batch_df = notes_db.select(["PERSON_ID", "MRN", config.note_column, config.date_of_diagnosis_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
         batch_df = batch_df.astype(str)
-        batch_df["KEPT_NOTES"] = [note_filter.apply_filters(notes, date) for notes, date in zip(batch_df.pop(config.note_column), batch_df.pop(config.date_of_diagnosis_column)]
+        batch_df["KEPT_NOTES"] = [note_filter.apply_filters(notes, date) for notes, date in zip(batch_df.pop(config.note_column), batch_df.pop(config.date_of_diagnosis_column))]
         notes_df = pd.concat((notes_df, batch_df))
         
     run_extraction(notes_df=notes_df, config=config)
 
-def batch_patients(db: spark.DataFrame, batch_size=100):
-    person_ids = db.rdd.map(lambda x: x.PERSON_ID).collect()
+def get_patient_ids(db: spark.DataFrame, config: ExtractionConfig | None = None, resume_run: bool = False, output_directory: str = ".") -> list:
+    patient_ids = db.rdd.map(lambda x: x.PERSON_ID).collect()
+    if resume_run:
+        if config is None:
+            raise TypeError("ExtractionConfig must be provided to resume a run")
+        
+        run_state = get_model_run_state(model_name=config.model, output_directory=output_directory)
+        if run_state is not None:
+            completed = [patient_id for patient_id, result_count in run_state.items() if result_count >= len(config.target_vars)]
+            patient_ids = list(set(patient_ids) - set(completed))
+
+    return patient_ids
+
+def batch_patients(patient_ids: list, db: spark.DataFrame, batch_size=100):
     batch_start = 0
-    while batch_start < len(person_ids):
-        batch_end = batch_start + batch_size if batch_start + batch_size < len(person_ids) else len(person_ids)
-        batch = person_ids[batch_start:batch_end]
+    while batch_start < len(patient_ids):
+        batch_end = batch_start + batch_size if batch_start + batch_size < len(patient_ids) else len(patient_ids)
+        batch = patient_ids[batch_start:batch_end]
         batch_start += batch_size
 
         yield batch
