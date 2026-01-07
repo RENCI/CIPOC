@@ -195,7 +195,7 @@ def run_extraction_batches(
             current_index += config.batch_size
             continue
 
-        notes_df = notes_db.select(["PERSON_ID", "MRN", config.note_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
+        notes_df = notes_db.select(["PERSON_ID", "MRN", config.note_column, config.date_of_diagnosis_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
         note_filter = NoteFilter(
             note_types_to_keep=config.note_types,
             days_before=config.note_days_before,
@@ -225,7 +225,7 @@ def run_extraction_batch_filter(
     
     notes_df = pd.DataFrame(columns=["PERSON_ID", "MRN", "KEPT_NOTES"])
     for patient_batch in batch_patients(notes_db, batch_size=config.batch_size):
-        batch_df = notes_db.select(["PERSON_ID", "MRN", config.note_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
+        batch_df = notes_db.select(["PERSON_ID", "MRN", config.note_column, config.date_of_diagnosis_column]).where(notes_db.PERSON_ID.isin(patient_batch)).toPandas()
         batch_df = batch_df.astype(str)
         batch_df["KEPT_NOTES"] = [note_filter.apply_filters(notes, date) for notes, date in zip(batch_df.pop(config.note_column), batch_df.pop(config.date_of_diagnosis_column)]
         notes_df = pd.concat((notes_df, batch_df))
