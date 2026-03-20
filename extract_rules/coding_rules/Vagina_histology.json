@@ -1,1 +1,36 @@
-"{\"Specific or NOS Term, Code, and Synonym(s)\":{\"0\":\"Adenocarcinoma NOS 8140 Adenocarcinoma, Skene, Cowper and Littre gland origin \\u2022 Periurethral gland adenocarcinoma  \\u2022 Skene adenocarcinoma \\u2022\",\"1\":\"Adenoid basal carcinoma 8098\",\"2\":\"Adenosarcoma 8933 (\\/3) Adenocarcinoma with sarcomatous overgrowth \\u2022 \\u2022 Mullerian adenosarcoma\",\"3\":\"Adenosquamous carcinoma 8560\",\"4\":\"Carcinosarcoma 8980 (\\/3)<s>1<\\/s>\\u2022 Malignant mixed Mullerian tumor\",\"5\":\"Clear cell carcinoma 8310\",\"6\":\"Endometrioid carcinoma 8380 Endometrial adenocarcinoma  \\u2022 \\u2022 Endometrial carcinoma\",\"7\":\"Germ cell tumor 9064 (\\/3)\",\"8\":\"Mesonephric adenocarcinoma 9110 (\\/3)\",\"9\":\"Mucinous carcinoma NOS 8480\",\"10\":\"Mucosal melanoma 8720 (\\/3)\",\"11\":\"Neuroendocrine carcinoma NOS 8246 (\\/3)\",\"12\":\"Neuroendocrine tumor NOS 8240 (\\/3)\",\"13\":\"Squamous cell carcinoma NOS 8070 SCC NOS \\u2022 \\u2022 Squamous cell carcinoma in-situ (\\/2)\",\"14\":\"Undifferentiated carcinoma 8020 (\\/3)\"},\"Subtype(s)\\/Variant(s) and Synonym(s)\":{\"0\":\"Adenocarcinoma, HPV-associated 8483\",\"1\":\"\",\"2\":\"\",\"3\":\"\",\"4\":\"\",\"5\":\"\",\"6\":\"\",\"7\":\"Yolk sac tumor 9071 (\\/3)\",\"8\":\"\",\"9\":\"Mucinous carcinoma, gastric type 8482 Mucinous carcinoma, intestinal type 8144\",\"10\":\"\",\"11\":\"Combined small cell neuroendocrine carcinoma 8045 (\\/3) Large cell neuroendocrine carcinoma 8013 (\\/3) Combined large cell neuroendocrine carcinoma \\u2022 Small cell neuroendocrine carcinoma 8041 (\\/3)\",\"12\":\"\",\"13\":\"High-grade squamous intraepithelial lesion 8077 (\\/2) Vaginal intraepithelial neoplasia, grade 2 \\u2022 Vaginal intraepithelial neoplasia, grade 3 \\u2022 Squamous cell carcinoma, HPV-associated 8085 Squamous cell carcinoma, HPV-independent 8086\",\"14\":\"\"}}"
+{
+  "Specific or NOS Term, Code, and Synonym(s)": {
+    "0": "Adenocarcinoma NOS 8140 Adenocarcinoma, Skene, Cowper and Littre gland origin \u2022 Periurethral gland adenocarcinoma  \u2022 Skene adenocarcinoma \u2022",
+    "1": "Adenoid basal carcinoma 8098",
+    "2": "Adenosarcoma 8933 (/3) Adenocarcinoma with sarcomatous overgrowth \u2022 \u2022 Mullerian adenosarcoma",
+    "3": "Adenosquamous carcinoma 8560",
+    "4": "Carcinosarcoma 8980 (/3)<s>1</s>\u2022 Malignant mixed Mullerian tumor",
+    "5": "Clear cell carcinoma 8310",
+    "6": "Endometrioid carcinoma 8380 Endometrial adenocarcinoma  \u2022 \u2022 Endometrial carcinoma",
+    "7": "Germ cell tumor 9064 (/3)",
+    "8": "Mesonephric adenocarcinoma 9110 (/3)",
+    "9": "Mucinous carcinoma NOS 8480",
+    "10": "Mucosal melanoma 8720 (/3)",
+    "11": "Neuroendocrine carcinoma NOS 8246 (/3)",
+    "12": "Neuroendocrine tumor NOS 8240 (/3)",
+    "13": "Squamous cell carcinoma NOS 8070 SCC NOS \u2022 \u2022 Squamous cell carcinoma in-situ (/2)",
+    "14": "Undifferentiated carcinoma 8020 (/3)"
+  },
+  "Subtype(s)/Variant(s) and Synonym(s)": {
+    "0": "Adenocarcinoma, HPV-associated 8483",
+    "1": "",
+    "2": "",
+    "3": "",
+    "4": "",
+    "5": "",
+    "6": "",
+    "7": "Yolk sac tumor 9071 (/3)",
+    "8": "",
+    "9": "Mucinous carcinoma, gastric type 8482 Mucinous carcinoma, intestinal type 8144",
+    "10": "",
+    "11": "Combined small cell neuroendocrine carcinoma 8045 (/3) Large cell neuroendocrine carcinoma 8013 (/3) Combined large cell neuroendocrine carcinoma \u2022 Small cell neuroendocrine carcinoma 8041 (/3)",
+    "12": "",
+    "13": "High-grade squamous intraepithelial lesion 8077 (/2) Vaginal intraepithelial neoplasia, grade 2 \u2022 Vaginal intraepithelial neoplasia, grade 3 \u2022 Squamous cell carcinoma, HPV-associated 8085 Squamous cell carcinoma, HPV-independent 8086",
+    "14": ""
+  }
+}

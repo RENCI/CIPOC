@@ -1,1 +1,18 @@
-"{\"Specific or NOS Term, Code, and Synonym(s)\":{\"0\":\"Gastrointestinal stromal tumor 8936 (\\/3) \\u2022 GIST\",\"1\":\"High-grade serous carcinoma 8461 (\\/3) \\u2022 Peritoneal serous carcinoma, high grade\",\"2\":\"Low-grade serous carcinoma 8460 (\\/3)\",\"3\":\"Mesothelioma, Malignant 9050 (\\/3) \\u2022 Mesothelioma NOS\",\"4\":\"Sarcoma NOS 8800 (\\/3)\",\"5\":\"Solitary fibrous tumor, malignant 8815 (\\/3)\"},\"Subtype(s)\\/Variant(s) and Synonym(s)\":{\"0\":\"\",\"1\":\"\",\"2\":\"\",\"3\":\"Epithelioid mesothelioma, malignant 9052 (\\/3) Mesothelioma, biphasic 9053 (\\/3) Sarcomatoid mesothelioma 9051 (\\/3)\",\"4\":\"Desmoplastic small round cell tumor 8806 (\\/3) Endometrioid stromal sarcoma, high-grade 8930 (\\/3) Endometrioid stromal sarcoma, low-grade 8931 (\\/3)\",\"5\":\"\"}}"
+{
+  "Specific or NOS Term, Code, and Synonym(s)": {
+    "0": "Gastrointestinal stromal tumor 8936 (/3) \u2022 GIST",
+    "1": "High-grade serous carcinoma 8461 (/3) \u2022 Peritoneal serous carcinoma, high grade",
+    "2": "Low-grade serous carcinoma 8460 (/3)",
+    "3": "Mesothelioma, Malignant 9050 (/3) \u2022 Mesothelioma NOS",
+    "4": "Sarcoma NOS 8800 (/3)",
+    "5": "Solitary fibrous tumor, malignant 8815 (/3)"
+  },
+  "Subtype(s)/Variant(s) and Synonym(s)": {
+    "0": "",
+    "1": "",
+    "2": "",
+    "3": "Epithelioid mesothelioma, malignant 9052 (/3) Mesothelioma, biphasic 9053 (/3) Sarcomatoid mesothelioma 9051 (/3)",
+    "4": "Desmoplastic small round cell tumor 8806 (/3) Endometrioid stromal sarcoma, high-grade 8930 (/3) Endometrioid stromal sarcoma, low-grade 8931 (/3)",
+    "5": ""
+  }
+}

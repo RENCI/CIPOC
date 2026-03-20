@@ -1,1 +1,14 @@
-"{\"Specific or NOS Term, Code, and Synonym(s)\":{\"0\":\"Germ cell tumor NOS 9064 \\u2022 Germ cell neoplasia in situ (\\/2) \\u2022 Intratubular germ cell neoplasia (\\/2) \\u2022 Intratubular malignant germ cells (\\/2)\",\"1\":\"Leydig cell tumor, malignant 8650 (\\/3)\",\"2\":\"Seminoma NOS 9061 \\u2022 Seminoma with syncytiotrophoblastic cells\",\"3\":\"Sertoli cell carcinoma 8640 (\\/3) \\u2022 Sertoli cell tumor, malignant\"},\"Subtype(s)\\/Variant(s) and Synonym(s)\":{\"0\":\"Choriocarcinoma 9100 Embryonal carcinoma 9070 Spermatocytic seminoma 9063 Spermatocytic tumor NOS \\u2022 Spermatocytic tumor with sarcomatous differentiation \\u2022 Teratoma with malignant transformation 9084Teratoma with somatic type malignancy \\u2022 Yolk sac tumor 9071 Alveolar pattern \\u2022 Endodermal sinus\\/perivasvular pattern \\u2022 Glandular pattern \\u2022 Hepatoid pattern \\u2022 \\u2022 Macrocystic pattern \\u2022 Microcystic pattern \\u2022 Myxoid pattern Papillary pattern \\u2022 Parietal pattern \\u2022 Perivascular pattern \\u2022 Polyvesicular vitelline pattern \\u2022 Reticular pattern \\u2022 Sarcomatoid pattern \\u2022 Solid pattern \\u2022 Spindle cell pattern \\u2022 Yolk sac tumor, prepubertal \\u2022\",\"1\":\"\",\"2\":\"\",\"3\":\"\"}}"
+{
+  "Specific or NOS Term, Code, and Synonym(s)": {
+    "0": "Germ cell tumor NOS 9064 \u2022 Germ cell neoplasia in situ (/2) \u2022 Intratubular germ cell neoplasia (/2) \u2022 Intratubular malignant germ cells (/2)",
+    "1": "Leydig cell tumor, malignant 8650 (/3)",
+    "2": "Seminoma NOS 9061 \u2022 Seminoma with syncytiotrophoblastic cells",
+    "3": "Sertoli cell carcinoma 8640 (/3) \u2022 Sertoli cell tumor, malignant"
+  },
+  "Subtype(s)/Variant(s) and Synonym(s)": {
+    "0": "Choriocarcinoma 9100 Embryonal carcinoma 9070 Spermatocytic seminoma 9063 Spermatocytic tumor NOS \u2022 Spermatocytic tumor with sarcomatous differentiation \u2022 Teratoma with malignant transformation 9084Teratoma with somatic type malignancy \u2022 Yolk sac tumor 9071 Alveolar pattern \u2022 Endodermal sinus/perivasvular pattern \u2022 Glandular pattern \u2022 Hepatoid pattern \u2022 \u2022 Macrocystic pattern \u2022 Microcystic pattern \u2022 Myxoid pattern Papillary pattern \u2022 Parietal pattern \u2022 Perivascular pattern \u2022 Polyvesicular vitelline pattern \u2022 Reticular pattern \u2022 Sarcomatoid pattern \u2022 Solid pattern \u2022 Spindle cell pattern \u2022 Yolk sac tumor, prepubertal \u2022",
+    "1": "",
+    "2": "",
+    "3": ""
+  }
+}

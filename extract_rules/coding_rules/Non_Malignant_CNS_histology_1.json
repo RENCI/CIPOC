@@ -1,1 +1,42 @@
-"{\"Histology Term and Code\":{\"0\":\"Angiocentric glioma 9431 (\\/1)\",\"1\":\"Choroid plexus papilloma 9390 (\\/0)\",\"2\":\"(Capillary) hemangioblastoma 9161 (\\/1)\",\"3\":\"Craniopharyngioma 9350 (\\/1)\",\"4\":\"Dermoid cyst 9084 (\\/0)\",\"5\":\"Desmoplastic infantile astrocytoma and ganglioglioma 9412 (\\/1)\",\"6\":\"Dysembryoplastic neuroepithelial tumor (DNT) 9413 (\\/0)\",\"7\":\"Dysplastic gangliocytoma 9493 (\\/0)\",\"8\":\"Juvenile xanthogranuloma 9749 (\\/1)\",\"9\":\"Meningioma (rare) 9530 (\\/0)\",\"10\":\"Myxopapillary ependymoma 9394 (\\/1)\",\"11\":\"Pilocytic astrocytoma\\/juvenile pilocytic astrocytoma 9421 (\\/1)\",\"12\":\"Pineocytoma 9361 (\\/1)\",\"13\":\"Pituicytoma 9432 (\\/1)\",\"14\":\"Pituitary adenoma 8272 (\\/0)\",\"15\":\"Prolactinoma 8271 (\\/0)\",\"16\":\"Subependymal giant cell tumor (SEGA) 9384 (\\/1)\",\"17\":\"Subependymoma 9383 (\\/1)\"},\"Most Common Intracranial Primary Site\":{\"0\":\"Cerebrum C710\",\"1\":\"Intraventricular site (lateral\\/third ventricle C715 and IV ventricle C717)\",\"2\":\"Cerebellum C716, cerebrum (rare) C710\",\"3\":\"Craniopharyngeal duct C752, pituitary gland, sella turcica C751\",\"4\":\"Pineal gland C753, suprasellar C719\",\"5\":\"Cerebrum\\/supratentorial brain NOS C710\",\"6\":\"Cerebrum C710, temporal lobe C712\",\"7\":\"Cerebellum C716\",\"8\":\"Intraventricular C715\",\"9\":\"Intraventricular C715\",\"10\":\"4 ventricle C717\",\"11\":\"Optic nerve C723\",\"12\":\"Pineal gland C753\",\"13\":\"Pituitary gland C751, sella turcica C751, suprasellar C719\",\"14\":\"Pituitary gland C751\",\"15\":\"Pituitary gland C751\",\"16\":\"Lateral ventricles C715\",\"17\":\"Intraventricular site (lateral\\/third ventricle, rare C715 and IV ventricle C717)\"}}"
+{
+  "Histology Term and Code": {
+    "0": "Angiocentric glioma 9431 (/1)",
+    "1": "Choroid plexus papilloma 9390 (/0)",
+    "2": "(Capillary) hemangioblastoma 9161 (/1)",
+    "3": "Craniopharyngioma 9350 (/1)",
+    "4": "Dermoid cyst 9084 (/0)",
+    "5": "Desmoplastic infantile astrocytoma and ganglioglioma 9412 (/1)",
+    "6": "Dysembryoplastic neuroepithelial tumor (DNT) 9413 (/0)",
+    "7": "Dysplastic gangliocytoma 9493 (/0)",
+    "8": "Juvenile xanthogranuloma 9749 (/1)",
+    "9": "Meningioma (rare) 9530 (/0)",
+    "10": "Myxopapillary ependymoma 9394 (/1)",
+    "11": "Pilocytic astrocytoma/juvenile pilocytic astrocytoma 9421 (/1)",
+    "12": "Pineocytoma 9361 (/1)",
+    "13": "Pituicytoma 9432 (/1)",
+    "14": "Pituitary adenoma 8272 (/0)",
+    "15": "Prolactinoma 8271 (/0)",
+    "16": "Subependymal giant cell tumor (SEGA) 9384 (/1)",
+    "17": "Subependymoma 9383 (/1)"
+  },
+  "Most Common Intracranial Primary Site": {
+    "0": "Cerebrum C710",
+    "1": "Intraventricular site (lateral/third ventricle C715 and IV ventricle C717)",
+    "2": "Cerebellum C716, cerebrum (rare) C710",
+    "3": "Craniopharyngeal duct C752, pituitary gland, sella turcica C751",
+    "4": "Pineal gland C753, suprasellar C719",
+    "5": "Cerebrum/supratentorial brain NOS C710",
+    "6": "Cerebrum C710, temporal lobe C712",
+    "7": "Cerebellum C716",
+    "8": "Intraventricular C715",
+    "9": "Intraventricular C715",
+    "10": "4 ventricle C717",
+    "11": "Optic nerve C723",
+    "12": "Pineal gland C753",
+    "13": "Pituitary gland C751, sella turcica C751, suprasellar C719",
+    "14": "Pituitary gland C751",
+    "15": "Pituitary gland C751",
+    "16": "Lateral ventricles C715",
+    "17": "Intraventricular site (lateral/third ventricle, rare C715 and IV ventricle C717)"
+  }
+}

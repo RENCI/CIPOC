@@ -1,1 +1,35 @@
-"{\"Specific or NOS Term, Code, and Synonym(s)\":{\"1\":\"Aortic body paraganglioma (C75.5) 8691 (\\/3) Aortic body tumor \\u2022 \\u2022 Aorticopulmonary paraganglioma\",\"2\":\"Carotid body paraganglioma (C75.4) 8692 (\\/3) \\u2022 Carotid body tumor\",\"3\":\"Extra-Adrenal paraganglioma, NOS 8693 (\\/3) Chemodectoma \\u2022 Composite paraganglioma \\u2022 \\u2022 Nonchromaffin paraganglioma NOS\",\"4\":\"Laryngeal paraganglioma\",\"5\":\"Middle ear paraganglioma (C75.5) 8690 (\\/3) Glomus jugulare tumor  \\u2022 Jugular \\u2022 \\u2022 Jugulotympanic paraganglioma\",\"6\":\"Paraganglioma NOS 8680 (\\/3)\",\"7\":\"Parasympathetic paraganglioma 8682 (\\/3)\",\"8\":\"Sympathetic paraganglioma 8681 (\\/3)\",\"9\":\"Vagal paraganglioma\"},\"ICD-O Code (Dx prior to 2021)<s>1<\\/s>\":{\"1\":\"8691 (\\/3)\",\"2\":\"8692 (\\/3)\",\"3\":\"8693 (\\/3)\",\"4\":\"8690 (\\/3)\",\"5\":\"8690 (\\/3)\",\"6\":\"8680 (\\/3)\",\"7\":\"8682 (\\/3)\",\"8\":\"8681 (\\/3)\",\"9\":\"8690 (\\/3)\"},\"ICD-O Code (Dx 2021+)<s>1<\\/s>\":{\"1\":\"8691 (\\/3)\",\"2\":\"8692 (\\/3)\",\"3\":\"8693 (\\/3)\",\"4\":\"8693 (\\/3)\",\"5\":\"8690 (\\/3)\",\"6\":\"8680 (\\/3)\",\"7\":\"8682 (\\/3)\",\"8\":\"8681 (\\/3)\",\"9\":\"8693 (\\/3)\"}}"
+{
+  "Specific or NOS Term, Code, and Synonym(s)": {
+    "1": "Aortic body paraganglioma (C75.5) 8691 (/3) Aortic body tumor \u2022 \u2022 Aorticopulmonary paraganglioma",
+    "2": "Carotid body paraganglioma (C75.4) 8692 (/3) \u2022 Carotid body tumor",
+    "3": "Extra-Adrenal paraganglioma, NOS 8693 (/3) Chemodectoma \u2022 Composite paraganglioma \u2022 \u2022 Nonchromaffin paraganglioma NOS",
+    "4": "Laryngeal paraganglioma",
+    "5": "Middle ear paraganglioma (C75.5) 8690 (/3) Glomus jugulare tumor  \u2022 Jugular \u2022 \u2022 Jugulotympanic paraganglioma",
+    "6": "Paraganglioma NOS 8680 (/3)",
+    "7": "Parasympathetic paraganglioma 8682 (/3)",
+    "8": "Sympathetic paraganglioma 8681 (/3)",
+    "9": "Vagal paraganglioma"
+  },
+  "ICD-O Code (Dx prior to 2021)<s>1</s>": {
+    "1": "8691 (/3)",
+    "2": "8692 (/3)",
+    "3": "8693 (/3)",
+    "4": "8690 (/3)",
+    "5": "8690 (/3)",
+    "6": "8680 (/3)",
+    "7": "8682 (/3)",
+    "8": "8681 (/3)",
+    "9": "8690 (/3)"
+  },
+  "ICD-O Code (Dx 2021+)<s>1</s>": {
+    "1": "8691 (/3)",
+    "2": "8692 (/3)",
+    "3": "8693 (/3)",
+    "4": "8693 (/3)",
+    "5": "8690 (/3)",
+    "6": "8680 (/3)",
+    "7": "8682 (/3)",
+    "8": "8681 (/3)",
+    "9": "8693 (/3)"
+  }
+}

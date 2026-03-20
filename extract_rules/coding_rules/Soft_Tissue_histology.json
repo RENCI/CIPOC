@@ -1,1 +1,24 @@
-"{\"Specific or NOS Term, Code, and Synonym(s)\":{\"0\":\"Angiosarcoma 9120 (\\/3)\",\"1\":\"Epithelioid hemangioendothelioma 9133 (\\/3) Epithelioid hemangioendothelioma with WWTR1-CAMTA1 \\u2022 fusion \\u2022 Epithelioid hemangioendothelioma with YAP1-TFE3 fusion\",\"2\":\"Fibrosarcoma NOS 8810 (\\/3) \\u2022 Adult fibrosarcoma\",\"3\":\"Leiomyosarcoma 8890 (\\/3)\",\"4\":\"Liposarcoma NOS 8850 (\\/3)\",\"5\":\"Osteosarcoma NOS 9180 (\\/3) \\u2022 Osteosarcoma, extraskeletal\",\"6\":\"Rhabdomyosarcoma NOS 8900 (\\/3)\",\"7\":\"Sarcoma NOS 8800 (\\/3)\",\"8\":\"Undifferentiated sarcoma 8805 (\\/3)\"},\"Subtype(s)\\/Variant(s) and Synonym(s)\":{\"0\":\"\",\"1\":\"\",\"2\":\"Infantile fibrosarcoma 8814 (\\/3) Low-grade fibromyxoid sarcoma 8840 (\\/3) Sclerosing epithelioid fibrosarcoma \\u2022 Myofibroblastic sarcoma 8825 (\\/3) \\u2022 Myofibrosarcoma Myxofibrosarcoma 8811 (\\/3) Solitary fibrous tumor, malignant 8815 (\\/3)\",\"3\":\"\",\"4\":\"Dedifferentiated liposarcoma 8858 (\\/3) Pleomorphic liposarcoma 8854 (\\/3) Epithelioid liposarcoma \\u2022 Myxoid liposarcoma 8852 (\\/3) Myxoid pleomorphic liposarcoma 8859 (\\/3) Well differentiated liposarcoma 8851 (\\/3)\",\"5\":\"\",\"6\":\"Alveolar rhabdomyosarcoma 8920 (\\/3) Ectomesenchymoma 8921 (\\/3) Embryonal rhabdomyosarcoma 8910 (\\/3) Pleomorphic rhabdomyosarcoma 8901 (\\/3) Spindle cell rhabdomyosarcoma 8912 (\\/3)  Congenital spindle cell rhabdomyosarcoma with \\u2022 VGLL2\\/NCOA2\\/CITED2 rearrangements Intraosseous spindle cell rhabdomyosarcoma (with \\u2022 TFCP2\\/NCOA2 rearrangements) \\u2022 MYOD1-mutant spindle cell Sclerosing rhabdomyosarcoma \\u2022\",\"7\":\"CIC-rearranged sarcoma 9367 (\\/3) Clear cell sarcoma of soft tissue 9044 (\\/3) Epithelioid sarcoma NOS 8804 (\\/3) Epithelioid sarcoma classical type \\u2022 Epithelioid sarcoma proximal or large cell type \\u2022 Extraskeletal Ewing sarcoma 9364 (\\/3) Extraskeletal myxoid chondrosarcoma 9231 (\\/3) Mixed tumor, malignant 8940 (\\/3) Myoepithelioma NOS 8982 (\\/3) \\u2022 Myoepithelial carcinoma Ossifying fibromyxoid tumor, malignant 8842 (\\/3) Phosphaturic mesenchymal tumor, malignant 8990 (\\/3) Round cell sarcoma with EWSR1-non ETS fusions 9366 (\\/3) Sarcoma with BCOR genetic alterations 9368 (\\/3) Synovial sarcoma NOS 9040 (\\/3) \\u2022 Synovial sarcoma, biphasic 9043 (\\/3) Synovial sarcoma, poorly differentiated o\",\"8\":\"Undifferentiated pleomorphic sarcoma 8802 (\\/3) Undifferentiated round cell sarcoma 8803 (\\/3) Undifferentiated spindle cell sarcoma 8801 (\\/3)\"}}"
+{
+  "Specific or NOS Term, Code, and Synonym(s)": {
+    "0": "Angiosarcoma 9120 (/3)",
+    "1": "Epithelioid hemangioendothelioma 9133 (/3) Epithelioid hemangioendothelioma with WWTR1-CAMTA1 \u2022 fusion \u2022 Epithelioid hemangioendothelioma with YAP1-TFE3 fusion",
+    "2": "Fibrosarcoma NOS 8810 (/3) \u2022 Adult fibrosarcoma",
+    "3": "Leiomyosarcoma 8890 (/3)",
+    "4": "Liposarcoma NOS 8850 (/3)",
+    "5": "Osteosarcoma NOS 9180 (/3) \u2022 Osteosarcoma, extraskeletal",
+    "6": "Rhabdomyosarcoma NOS 8900 (/3)",
+    "7": "Sarcoma NOS 8800 (/3)",
+    "8": "Undifferentiated sarcoma 8805 (/3)"
+  },
+  "Subtype(s)/Variant(s) and Synonym(s)": {
+    "0": "",
+    "1": "",
+    "2": "Infantile fibrosarcoma 8814 (/3) Low-grade fibromyxoid sarcoma 8840 (/3) Sclerosing epithelioid fibrosarcoma \u2022 Myofibroblastic sarcoma 8825 (/3) \u2022 Myofibrosarcoma Myxofibrosarcoma 8811 (/3) Solitary fibrous tumor, malignant 8815 (/3)",
+    "3": "",
+    "4": "Dedifferentiated liposarcoma 8858 (/3) Pleomorphic liposarcoma 8854 (/3) Epithelioid liposarcoma \u2022 Myxoid liposarcoma 8852 (/3) Myxoid pleomorphic liposarcoma 8859 (/3) Well differentiated liposarcoma 8851 (/3)",
+    "5": "",
+    "6": "Alveolar rhabdomyosarcoma 8920 (/3) Ectomesenchymoma 8921 (/3) Embryonal rhabdomyosarcoma 8910 (/3) Pleomorphic rhabdomyosarcoma 8901 (/3) Spindle cell rhabdomyosarcoma 8912 (/3)  Congenital spindle cell rhabdomyosarcoma with \u2022 VGLL2/NCOA2/CITED2 rearrangements Intraosseous spindle cell rhabdomyosarcoma (with \u2022 TFCP2/NCOA2 rearrangements) \u2022 MYOD1-mutant spindle cell Sclerosing rhabdomyosarcoma \u2022",
+    "7": "CIC-rearranged sarcoma 9367 (/3) Clear cell sarcoma of soft tissue 9044 (/3) Epithelioid sarcoma NOS 8804 (/3) Epithelioid sarcoma classical type \u2022 Epithelioid sarcoma proximal or large cell type \u2022 Extraskeletal Ewing sarcoma 9364 (/3) Extraskeletal myxoid chondrosarcoma 9231 (/3) Mixed tumor, malignant 8940 (/3) Myoepithelioma NOS 8982 (/3) \u2022 Myoepithelial carcinoma Ossifying fibromyxoid tumor, malignant 8842 (/3) Phosphaturic mesenchymal tumor, malignant 8990 (/3) Round cell sarcoma with EWSR1-non ETS fusions 9366 (/3) Sarcoma with BCOR genetic alterations 9368 (/3) Synovial sarcoma NOS 9040 (/3) \u2022 Synovial sarcoma, biphasic 9043 (/3) Synovial sarcoma, poorly differentiated o",
+    "8": "Undifferentiated pleomorphic sarcoma 8802 (/3) Undifferentiated round cell sarcoma 8803 (/3) Undifferentiated spindle cell sarcoma 8801 (/3)"
+  }
+}
