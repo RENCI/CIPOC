@@ -98,6 +98,7 @@ def select_subtree(
     root_heading_contains: str,
     *,
     boundary_heading_contains: str | None = None,
+    root_level: int | None = None,
 ) -> list[Section]:
     """Return the sections of the first subtree whose root heading matches.
 
@@ -112,10 +113,24 @@ def select_subtree(
       ``# Breast NOS C509.``); the true site-group roots all carry
       'Equivalent Terms and Definitions', so passing that marker cleanly bounds
       one site group regardless of interior heading noise.
+
+    ``root_level`` restricts the root match to headings at exactly that level.
+    Substring matching alone picks the *first* match, which can be a deeper
+    heading that merely quotes the chapter title: SPCSM's real ``## Regional
+    Nodes Examined`` chapter is preceded by a ``#### 05 and Regional Nodes
+    Examined ...`` code-table line inside the previous chapter. No search string
+    can separate them, because the decoy contains the chapter title in full.
+    Compiling the decoy would silently emit units that are faithful excerpts of
+    the wrong section, so pass the chapter's own level to pin the root.
     """
     needle = root_heading_contains.casefold()
     start = next(
-        (i for i, s in enumerate(sections) if needle in s.heading.casefold()),
+        (
+            i
+            for i, s in enumerate(sections)
+            if needle in s.heading.casefold()
+            and (root_level is None or s.level == root_level)
+        ),
         None,
     )
     if start is None:
