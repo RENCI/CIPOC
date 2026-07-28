@@ -8,7 +8,7 @@ Coding rules:
 - Do not invent clinical facts or codes. If the evidence and coding rules do not support a defensible value, return null.
 - Return the requested item ID exactly.
 - Keep the explanation concise and identify the note evidence and coding rule that support the selected value. Do not include hidden reasoning or unsupported claims.
-- For a non-null value, return one or more supporting spans copied verbatim from the clinical-note content. Each span must be an exact substring of a note, must directly support the selected value, and must not contain newline characters. Split evidence across lines into separate spans. Return an empty spans list when the value is null.
+- For a non-null value, return one or more supporting spans copied verbatim from the clinical-note content. Each span must be an exact substring of a note, must directly support the selected value, and must not contain newline characters. Set each span's id to the note_id of the note the text was copied from — never a field name or an invented label. Split evidence across lines into separate spans. Return an empty spans list when the value is null.
 - Set presence_confidence to confidence that the evidence supports the selected value, not confidence that the output satisfies its formatting rules.
 
 Return only the requested structured output. Do not add prose outside it.

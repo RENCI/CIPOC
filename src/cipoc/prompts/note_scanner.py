@@ -6,16 +6,22 @@ specific instructions given for each task.
 """
 
 
-CANCER_IN_NOTE_PROMPT = """\
-Determine whether the clinical note mentions a cancer case.
+CONCEPT_DETECTION_PROMPT = """\
+Determine which of the following clinical concepts are present in the note.
 
-"Cancer" includes any malignant neoplasm — current, recent, or historical — including \
-explicit diagnoses, cancer-directed treatments (e.g. chemotherapy, radiation), pathology \
-findings, and clear references to a prior malignancy.
+Concepts:
+{concept_list}
 
-Answer with:
-- cancer_present: true if any malignant neoplasm is mentioned, otherwise false. If uncertain, default to true.
-- presence_confidence: your confidence that cancer is (or is not) present.
+For each concept listed above, report:
+- concept: the concept key exactly as written above.
+- presence: true if the concept is present in the note, otherwise false. If you are uncertain \
+whether cancer is present, default to true.
+- confidence: your confidence in the presence/absence judgment for that concept.
+- evidence: verbatim text span(s) from the note supporting a positive finding; leave empty \
+when the concept is absent.
+
+Return exactly one finding per concept listed above. Do not report concepts that are not \
+listed, and do not omit any listed concept.
 """
 
 
@@ -44,7 +50,9 @@ Identify every distinct cancer case mentioned in the note. For each mention, rep
 - status: "current" (ongoing), "recent" (resolved <10 years prior), or "historical" (resolved 10+ years prior).
 - affected_tissue: the primary organ or tissue affected.
 - metastasis: whether metastases are mentioned for that case.
+- presence: true (each reported mention is, by definition, present in the note).
 - confidence: your confidence in the reported details for that mention.
+- evidence: verbatim text span(s) from the note supporting that mention.
 
 If no cancer is mentioned, return an empty list.
 """
