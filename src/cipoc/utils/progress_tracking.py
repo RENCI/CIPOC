@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 import os
 import shutil
 import sys
@@ -16,7 +17,7 @@ TaskKind = Literal["llm", "deterministic", "container"]
 
 _DEFAULT_NODE_KINDS: dict[str, TaskKind] = {
     "initialize": "deterministic",
-    "retrieve_clinical_notes": "deterministic",
+    "load_notes": "deterministic",
     "extract_group_values": "llm",
     "variable_branch": "container",
     "extract_individual_value": "llm",
@@ -27,6 +28,17 @@ _DEFAULT_NODE_KINDS: dict[str, TaskKind] = {
     "summarize_note": "llm",
     "check_note_for_cancer": "llm",
     "get_cancer_mentions": "llm",
+    "scan_notes": "deterministic",
+    "note_branch": "container",
+    "characterize_corpus": "deterministic",
+    "check_state": "deterministic",
+    "plan_extraction": "deterministic",
+    "extract_branch": "container",
+    "retrieve_notes": "llm",
+    "extract": "container",
+    "merge_and_update": "deterministic",
+    "finalize_case": "deterministic",
+    "identify_relevant_notes": "llm",
 }
 
 
@@ -66,6 +78,19 @@ class _Branch:
     task_ids: list[str] = field(default_factory=list)
     value: str | None = None
     errors: list[str] = field(default_factory=list)
+
+
+@dataclass
+class _OrchestratorVariable:
+    item_id: str
+    name: str
+    group_id: str
+    group_name: str
+    status: str = "pending"
+    running: bool = False
+    value: str | None = None
+    reason: str | None = None
+    transient_error: str | None = None
 
 
 def _field(value: Any, name: str, default: Any = None) -> Any:
@@ -152,6 +177,7 @@ class _ProgressDisplay:
         )
         self._color = self._interactive and "NO_COLOR" not in os.environ
         self._fatal_error: str | None = None
+        self._verbose_noninteractive = True
 
     def _style(self, text: str, *styles: str) -> str:
         if not self._color:
@@ -181,7 +207,7 @@ class _ProgressDisplay:
         self._task_started(task, task_input)
         if self._interactive:
             self.draw()
-        elif task.kind != "container":
+        elif self._verbose_noninteractive and task.kind != "container":
             self._write(f"  > {task.label} [{task.kind}]")
 
     def finish(
@@ -211,7 +237,7 @@ class _ProgressDisplay:
         self._task_finished(task, result)
         if self._interactive:
             self.draw()
-        elif task.kind != "container":
+        elif self._verbose_noninteractive and task.kind != "container":
             marker = "x" if task.status in {"error", "invalid"} else "v"
             detail = f": {task.error}" if task.error else ""
             self._write(f"  {marker} {task.label}{detail}")
@@ -221,6 +247,9 @@ class _ProgressDisplay:
 
     def _task_finished(self, task: _Task, result: Any) -> None:
         pass
+
+    def update_values(self, values: Any) -> None:
+        """Consume a root state snapshot when a display needs durable state."""
 
     def fail(self, error: BaseException) -> None:
         self._fatal_error = str(error)
@@ -406,8 +435,10 @@ class _ProgressDisplay:
         for index in range(line_count):
             line = lines[index] if index < len(lines) else ""
             self.stream.write(f"\r\033[2K{line}\n")
+        if line_count > len(lines):
+            self.stream.write(f"\033[{line_count - len(lines)}A")
         self.stream.flush()
-        self._rendered_lines = line_count
+        self._rendered_lines = len(lines)
 
     def _write(self, text: str) -> None:
         self.stream.write(text + "\n")
@@ -726,6 +757,329 @@ class _BranchProgressDisplay(_ProgressDisplay):
         return lines
 
 
+class _OrchestratorProgressDisplay(_ProgressDisplay):
+    """Render all requested case variables in one viewport-bounded dashboard."""
+
+    _FULL_STATUS = {
+        "pending": "PENDING",
+        "running": "RUNNING",
+        "structured_data": "STRUCTURED",
+        "extracted": "EXTRACTED",
+        "not_found": "NOT FOUND",
+        "not_applicable": "N/A",
+        "blocked": "BLOCKED",
+        "error": "ERROR",
+    }
+    _SHORT_STATUS = {
+        "pending": "PEND",
+        "running": "RUN",
+        "structured_data": "DATA",
+        "extracted": "EXT",
+        "not_found": "MISS",
+        "not_applicable": "N/A",
+        "blocked": "BLK",
+        "error": "ERR",
+    }
+    _STATUS_SYMBOL = {
+        "pending": ".",
+        "running": ">",
+        "structured_data": "S",
+        "extracted": "+",
+        "not_found": "-",
+        "not_applicable": "x",
+        "blocked": "#",
+        "error": "!",
+    }
+    _TERMINAL_STATUSES = {
+        "structured_data",
+        "extracted",
+        "not_found",
+        "not_applicable",
+        "blocked",
+        "error",
+    }
+    _PHASES = {
+        "initialize": "initialization",
+        "scan_notes": "note scanning",
+        "note_branch": "note scanning",
+        "characterize_corpus": "corpus characterization",
+        "check_state": "extraction planning",
+        "plan_extraction": "extraction planning",
+        "extract_branch": "extraction",
+        "retrieve_notes": "extraction",
+        "extract": "extraction",
+        "merge_and_update": "extraction planning",
+        "finalize_case": "finalization",
+    }
+
+    def __init__(
+        self,
+        description: str,
+        graph_input: Any,
+        target_groups: Any,
+        *,
+        node_kinds: Mapping[str, TaskKind] | None = None,
+        stream: TextIO | None = None,
+    ):
+        super().__init__(description, node_kinds=node_kinds, stream=stream)
+        self._verbose_noninteractive = False
+        self.variables: dict[str, _OrchestratorVariable] = {}
+        self._variable_order: list[str] = []
+        self._active_note_tasks: set[str] = set()
+        self._completed_note_tasks: set[str] = set()
+        self._active_groups: dict[str, list[str]] = {}
+        self._phase = "initialization"
+        self._detail = "Preparing case extraction."
+        note_corpus = _field(graph_input, "note_corpus", {}) or {}
+        self._note_total = len(note_corpus)
+        self._load_target_groups(target_groups)
+
+    def _load_target_groups(self, target_groups: Any) -> None:
+        for group_index, group in enumerate(target_groups or []):
+            group_id = str(_field(group, "group_id") or group_index + 1)
+            group_name = str(_field(group, "name") or f"Group {group_id}")
+            for variable in _field(group, "variables", []) or []:
+                item_id = str(_field(variable, "item_id", ""))
+                if not item_id or item_id in self.variables:
+                    continue
+                name = str(_field(variable, "name") or f"Variable {item_id}")
+                self.variables[item_id] = _OrchestratorVariable(
+                    item_id=item_id,
+                    name=name,
+                    group_id=group_id,
+                    group_name=group_name,
+                )
+                self._variable_order.append(item_id)
+
+    @staticmethod
+    def _status_value(result: Any) -> str:
+        status = _field(result, "status", "pending")
+        return str(getattr(status, "value", status)).lower()
+
+    def _group_from_input(self, task_input: Any) -> Any:
+        return _field(task_input, "requested_variables")
+
+    def _task_started(self, task: _Task, task_input: Any) -> None:
+        phase = self._PHASES.get(task.node_name)
+        if phase:
+            self._phase = phase
+
+        if task.node_name == "note_branch":
+            self._active_note_tasks.add(task.task_id)
+            note_id = _field(task_input, "note_id")
+            self._detail = (
+                f"Scanning note {note_id}." if note_id is not None else "Scanning clinical notes."
+            )
+            return
+
+        if task.node_name != "extract_branch":
+            return
+        group = self._group_from_input(task_input)
+        if group is None:
+            return
+        item_ids = [
+            str(_field(variable, "item_id", ""))
+            for variable in (_field(group, "variables", []) or [])
+        ]
+        item_ids = [item_id for item_id in item_ids if item_id in self.variables]
+        self._active_groups[task.task_id] = item_ids
+        for item_id in item_ids:
+            variable = self.variables[item_id]
+            if variable.status == "pending":
+                variable.running = True
+                variable.transient_error = None
+        group_name = str(_field(group, "name") or "variable group")
+        self._detail = f"Extracting {group_name}."
+
+    def _task_finished(self, task: _Task, result: Any) -> None:
+        if task.node_name == "note_branch":
+            self._active_note_tasks.discard(task.task_id)
+            self._completed_note_tasks.add(task.task_id)
+
+        if task.node_name == "extract_branch" and task.status == "error":
+            reason = task.error or "Extraction group failed."
+            for item_id in self._active_groups.get(task.task_id, []):
+                variable = self.variables[item_id]
+                if variable.status == "pending":
+                    variable.running = False
+                    variable.transient_error = reason
+            self._detail = reason
+
+        if task.status == "error" and task.error:
+            self._detail = task.error
+
+    def update_values(self, values: Any) -> None:
+        results = _field(values, "variable_results", {}) or {}
+        for item_id, result in results.items():
+            variable = self.variables.get(str(item_id))
+            if variable is None:
+                continue
+            variable.status = self._status_value(result)
+            variable.value = (
+                str(_field(result, "value"))
+                if _field(result, "value") is not None
+                else None
+            )
+            variable.reason = (
+                str(_field(result, "reason"))
+                if _field(result, "reason") is not None
+                else None
+            )
+            if variable.status != "pending":
+                variable.running = False
+                variable.transient_error = None
+            if variable.status in {"blocked", "error"} and variable.reason:
+                self._detail = f"{variable.name}: {variable.reason}"
+        if self._interactive:
+            self.draw()
+
+    def fail(self, error: BaseException) -> None:
+        reason = str(error)
+        for variable in self.variables.values():
+            if variable.running:
+                variable.running = False
+                variable.transient_error = reason
+        self._detail = reason
+        super().fail(error)
+
+    def _display_status(self, variable: _OrchestratorVariable) -> str:
+        if variable.transient_error:
+            return "error"
+        if variable.running and variable.status == "pending":
+            return "running"
+        return variable.status
+
+    def _counts(self) -> dict[str, int]:
+        counts = {status: 0 for status in self._FULL_STATUS}
+        for variable in self.variables.values():
+            status = self._display_status(variable)
+            counts[status] = counts.get(status, 0) + 1
+        return counts
+
+    def _cell(self, variable: _OrchestratorVariable, width: int) -> str:
+        status = self._display_status(variable)
+        item_id = variable.item_id
+        full = self._FULL_STATUS.get(status, status.upper())
+        short = self._SHORT_STATUS.get(status, full[:4])
+        symbol = self._STATUS_SYMBOL.get(status, "?")
+        required = f"{item_id} {full}"
+        if len(required) <= width:
+            prefix = required
+        elif len(f"{item_id} {short}") <= width:
+            prefix = f"{item_id} {short}"
+        else:
+            prefix = _truncate(f"{item_id}{symbol}", width)
+
+        remaining = width - len(prefix) - 1
+        if remaining >= 4:
+            prefix += " " + _truncate(variable.name, remaining)
+        raw = f"{prefix:<{width}}"[:width]
+        color = (
+            _Color.ACTIVE
+            if status == "running"
+            else _Color.SUCCESS
+            if status in {"structured_data", "extracted"}
+            else _Color.ERROR
+            if status in {"blocked", "error"}
+            else _Color.GREY
+        )
+        return self._style(raw, color)
+
+    def _group_cell(self, group_name: str, width: int) -> str:
+        raw = f"{_truncate('[' + group_name + ']', width):<{width}}"[:width]
+        return self._style(raw, _Color.BOLD, _Color.MAIN)
+
+    def _terminal_size(self) -> os.terminal_size:
+        return shutil.get_terminal_size((100, 24))
+
+    def _render(self, final: bool) -> list[str]:
+        size = self._terminal_size()
+        width = max(1, size.columns)
+        height = max(1, size.lines)
+        elapsed = time.monotonic() - self.started_at
+        variables = [self.variables[item_id] for item_id in self._variable_order]
+        grid_items: list[tuple[str, str | _OrchestratorVariable]] = []
+        previous_group: str | None = None
+        for variable in variables:
+            if variable.group_id != previous_group:
+                grid_items.append(("group", variable.group_name))
+                previous_group = variable.group_id
+            grid_items.append(("variable", variable))
+        counts = self._counts()
+        terminal = sum(counts.get(status, 0) for status in self._TERMINAL_STATUSES)
+        note_complete = min(len(self._completed_note_tasks), self._note_total)
+
+        title_text = f"CIPOC / {self.description.upper()} / {self._phase.upper()}"
+        summary_text = (
+            f"Notes {note_complete}/{self._note_total} | Variables {terminal}/{len(variables)} terminal"
+            f" | {elapsed:.1f}s"
+        )
+        count_text = (
+            f"Run {counts['running']} | Ext {counts['extracted']} | Data {counts['structured_data']}"
+            f" | Missing {counts['not_found']} | N/A {counts['not_applicable']}"
+            f" | Blocked {counts['blocked']} | Error {counts['error']}"
+        )
+
+        # Three header lines plus a legend and detail line are always reserved.
+        fixed_lines = 5
+        available_rows = max(1, height - fixed_lines)
+        columns = max(1, math.ceil(len(grid_items) / available_rows)) if grid_items else 1
+        gap = 1
+        cell_width = max(1, (width - gap * (columns - 1)) // columns)
+        grid: list[str] = []
+        for start in range(0, len(grid_items), columns):
+            row = grid_items[start : start + columns]
+            cells = [
+                self._group_cell(item, cell_width)
+                if kind == "group"
+                else self._cell(item, cell_width)
+                for kind, item in row
+            ]
+            grid.append((" " * gap).join(cells))
+
+        legend = "P pending  > running  + extracted  S structured  - not found  x N/A  # blocked  ! error"
+        if final and not self._fatal_error:
+            detail = f"Complete: {terminal}/{len(variables)} variables terminal in {elapsed:.1f}s."
+        elif self._fatal_error:
+            detail = f"Failed: {self._fatal_error}"
+        else:
+            detail = self._detail
+        lines = [
+            self._style(_truncate(title_text, width), _Color.BOLD, _Color.MAIN),
+            _truncate(summary_text, width),
+            _truncate(count_text, width),
+            *grid,
+            self._style(_truncate(legend, width), _Color.DIM),
+            _truncate(detail, width),
+        ]
+        return lines[:height]
+
+    def draw(self, *, final: bool = False) -> None:
+        if self._interactive:
+            super().draw(final=final)
+            return
+        if self._draw_count == 0:
+            self._write(
+                f"CIPOC / {self.description}: {self._note_total} notes, "
+                f"{len(self.variables)} variables"
+            )
+        if final:
+            elapsed = time.monotonic() - self.started_at
+            counts = self._counts()
+            if self._fatal_error:
+                self._write(f"  failed after {elapsed:.1f}s: {self._fatal_error}")
+            else:
+                terminal = sum(
+                    counts.get(status, 0) for status in self._TERMINAL_STATUSES
+                )
+                self._write(
+                    f"  complete: {terminal}/{len(self.variables)} terminal; "
+                    f"extracted={counts['extracted']}, structured={counts['structured_data']}, "
+                    f"not_found={counts['not_found']}, not_applicable={counts['not_applicable']}, "
+                    f"blocked={counts['blocked']}, error={counts['error']} in {elapsed:.1f}s"
+                )
+        self._draw_count += 1
+
 def run_with_progress(
     graph: CompiledStateGraph,
     graph_input: Any,
@@ -734,17 +1088,26 @@ def run_with_progress(
     description: str = "Agent",
     node_kinds: Mapping[str, TaskKind] | None = None,
     show_branches: bool = False,
+    target_groups: Any = None,
 ) -> Any:
     """Run a LangGraph graph with live progress and return its final state.
 
     Set ``subgraphs=True`` to include nodes inside compiled subgraphs. Known
-    CIPOC nodes are classified automatically. Pass ``node_kinds`` to
-    override or extend those classifications for custom graphs. The branch board
-    additionally groups subgraph tasks by variable metadata in their input.
+    CIPOC nodes are classified automatically. Pass ``node_kinds`` to override or
+    extend those classifications for custom graphs. The branch board groups
+    subgraph tasks by variable metadata in their input. Passing ``target_groups``
+    selects the viewport-bounded orchestrator dashboard instead.
     """
     final_result: Any = None
     display: _ProgressDisplay
-    if show_branches:
+    if target_groups is not None:
+        display = _OrchestratorProgressDisplay(
+            description,
+            graph_input,
+            target_groups,
+            node_kinds=node_kinds,
+        )
+    elif show_branches:
         display = _BranchProgressDisplay(
             description,
             graph_input,
@@ -775,6 +1138,7 @@ def run_with_progress(
             if mode == "values":
                 if not namespace:
                     final_result = event
+                    display.update_values(event)
                 continue
 
             task_id = str(event["id"])
