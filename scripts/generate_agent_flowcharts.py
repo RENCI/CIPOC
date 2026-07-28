@@ -633,6 +633,7 @@ def build_html(flowcharts: dict[str, Any], cytoscape_source: str) -> str:
       padding: 8px 11px;
       border-bottom: 1px solid #e5e8ee;
     }
+    .chart-actions { display: flex; flex: 0 0 auto; gap: 6px; }
     .chart-title { margin: 0; font-size: 14px; }
     .chart-description { margin: 2px 0 0; color: #7a8498; font-size: 10px; }
     .canvas { height: 350px; background: #fbfcfe; }
@@ -700,6 +701,23 @@ __CYTOSCAPE_END_MARKER__
       fit(instance);
     }
 
+    function savePng(instance) {
+      const blob = instance.cy.png({
+        output: "blob",
+        full: true,
+        scale: 2,
+        bg: "#fbfcfe"
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `cipoc-${instance.chart.id.replaceAll("_", "-")}.png`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    }
+
     for (const chart of documentData.charts) {
       const card = document.createElement("article");
       card.className = "chart-card";
@@ -718,7 +736,13 @@ __CYTOSCAPE_END_MARKER__
       const fitButton = document.createElement("button");
       fitButton.type = "button";
       fitButton.textContent = "Fit chart";
-      header.append(headingGroup, fitButton);
+      const saveButton = document.createElement("button");
+      saveButton.type = "button";
+      saveButton.textContent = "Save PNG";
+      const actions = document.createElement("div");
+      actions.className = "chart-actions";
+      actions.append(fitButton, saveButton);
+      header.append(headingGroup, actions);
 
       const canvas = document.createElement("div");
       canvas.className = "canvas";
@@ -742,6 +766,7 @@ __CYTOSCAPE_END_MARKER__
       const instance = { chart, cy, footer };
       instances.push(instance);
       fitButton.addEventListener("click", () => fit(instance));
+      saveButton.addEventListener("click", () => savePng(instance));
 
       cy.on("tap", "node", event => {
         const data = event.target.data();
