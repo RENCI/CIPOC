@@ -2,7 +2,7 @@
 
 Loads a YAML config defining a default LLM configuration plus optional
 per-agent overrides, expands ``${VAR}`` environment placeholders, and builds
-merged :class:`~cipoc.llm.OpenAIConfig` / :class:`~cipoc.llm.RateLimiter`
+merged :class:`~cipoc.llm.OpenAIConfig` / :class:`~cipoc.llm.RetryPolicy`
 objects for each agent.
 """
 
@@ -17,7 +17,7 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from cipoc.llm import LLMConfig, RateLimiter, config_for
+from cipoc.llm import LLMConfig, RetryPolicy, config_for, llm_retry_policy
 
 
 class DocumentsConfig(BaseModel):
@@ -112,14 +112,17 @@ class CipocConfig:
         """Build the provider-specific :class:`LLMConfig` for ``agent`` (or the
         defaults if None), choosing the config class from the ``provider`` setting."""
         settings = self.agent_settings(agent) if agent is not None else copy.deepcopy(self.defaults)
-        settings.pop("limiter", None)
+        # `retry` configures the graph, not the model client. OpenAIConfig allows
+        # extra fields, so leaving it in would forward it to ChatOpenAI.
+        settings.pop("retry", None)
         return config_for(settings.get("provider", "openai"))(**settings)
 
-    def limiter(self, agent: str | None = None) -> RateLimiter:
-        """Build the :class:`RateLimiter` for ``agent`` (or the defaults if None)."""
+    def retry_policy(self, agent: str | None = None) -> RetryPolicy:
+        """Build the LLM-node :class:`RetryPolicy` for ``agent`` (or the defaults
+        if None). Config keys are ``RetryPolicy`` fields; anything omitted falls
+        back to :data:`~cipoc.llm.DEFAULT_RETRY_SETTINGS`."""
         settings = self.agent_settings(agent) if agent is not None else copy.deepcopy(self.defaults)
-        limiter_settings = settings.get("limiter") or {}
-        return RateLimiter(**limiter_settings)
+        return llm_retry_policy(**(settings.get("retry") or {}))
 
     def documents(self) -> DocumentsConfig:
         """Build the :class:`DocumentsConfig` from the ``documents`` section."""

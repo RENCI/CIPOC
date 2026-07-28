@@ -67,7 +67,9 @@ class NoteRetrieverAgent(BaseAgent):
     # --- Graph wiring (compiled once per instance) ---
     def _wire_graph(self, workflow: StateGraph) -> None:
         workflow.add_node("initialize", self.initialize)
-        workflow.add_node("identify_relevant_notes", self.identify_relevant_notes)
+        workflow.add_node(
+            "identify_relevant_notes", self.identify_relevant_notes, retry_policy=self.retry_policy
+        )
 
         workflow.add_edge(START, "initialize")
         workflow.add_edge("initialize", "identify_relevant_notes")

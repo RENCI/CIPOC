@@ -9,7 +9,7 @@ from langchain_core.runnables.graph import CurveStyle, NodeStyles
 from langgraph.graph import StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
-from cipoc.llm import BaseAgentModel, LLMConfig, agent_model_for
+from cipoc.llm import BaseAgentModel, LLMConfig, RetryPolicy, agent_model_for
 from cipoc.utils import CipocConfig, load_config
 
 
@@ -46,6 +46,7 @@ MERMAID_STYLE: dict[str, Any] = dict(
 class BaseAgent(ABC):
     _config: CipocConfig
     _llm_config: LLMConfig
+    _retry_policy: RetryPolicy
     _tools: list[StructuredTool] | None
     agent: BaseAgentModel
     _graph: CompiledStateGraph
@@ -63,8 +64,23 @@ class BaseAgent(ABC):
     ) -> None:
         self._config = config or load_config()
         self._llm_config = self._config.llm_config(agent_type)
+        self._retry_policy = self._config.retry_policy(agent_type)
         self.agent = self._initialize_agent_model(llm, **kwargs)
         self._graph = self._build_graph()
+
+    @property
+    def retry_policy(self) -> RetryPolicy:
+        """Retry policy for this agent's LLM-backed nodes.
+
+        Pass to ``add_node(..., retry_policy=self.retry_policy)`` on every node
+        that calls the model, and only those. Retrying at the node that issued
+        the request replays one LLM call rather than a whole branch, and keeps
+        the retry off deterministic nodes where a failure is a real bug.
+
+        Subgraph nodes carry their own policy, so a node whose body invokes a
+        subagent graph must not also be wrapped — that would multiply attempts.
+        """
+        return self._retry_policy
 
     def _initialize_agent_model(self, llm: BaseAgentModel | None = None, **kwargs) -> BaseAgentModel:
         return llm or agent_model_for(self._llm_config.provider)(config=self._llm_config, **kwargs)

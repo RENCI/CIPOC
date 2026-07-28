@@ -87,7 +87,7 @@ Runtime config is loaded from `config/config.yaml` via
 environment at load time.
 
 - `llm:` — default LLM settings applied to every agent (model, provider,
-  `base_url`, `api_key`, `max_concurrency`, reasoning effort, rate-limiter).
+  `base_url`, `api_key`, `max_concurrency`, reasoning effort, `retry`).
 - `agents:` — optional per-agent overrides (e.g. `extractor`, `note_scanner`,
   `note_retriever`, `orchestrator`), merged on top of the `llm` defaults.
 - `documents:` — paths to the NAACCR data dictionary, the compiled rule store,
@@ -192,7 +192,7 @@ src/cipoc/
 ├── llm/
 │   ├── base.py            # LLMConfig / BaseAgentModel abstractions
 │   ├── openai.py          # OpenAI-compatible ChatOpenAI wrapper
-│   └── limiter.py         # Retry/backoff RateLimiter
+│   └── retry.py           # RetryPolicy for LLM-backed graph nodes
 ├── models/                # Pydantic contracts (see below)
 ├── prompts/               # Per-agent prompt strings
 ├── tools/

@@ -3,8 +3,13 @@
 from typing import NamedTuple
 
 from .base import BaseAgentModel, LLMConfig
-from .limiter import MaxRetriesExceededError, RateLimiter
 from .openai import OpenAIAgentModel, OpenAIConfig, OpenAIReasoning
+from .retry import (
+    DEFAULT_RETRY_SETTINGS,
+    RetryPolicy,
+    llm_retry_policy,
+    retry_on_transient,
+)
 
 
 class ProviderClasses(NamedTuple):
@@ -50,8 +55,10 @@ __all__ = [
     "OpenAIAgentModel",
     "OpenAIConfig",
     "OpenAIReasoning",
-    "RateLimiter",
-    "MaxRetriesExceededError",
+    "DEFAULT_RETRY_SETTINGS",
+    "RetryPolicy",
+    "llm_retry_policy",
+    "retry_on_transient",
     "ProviderClasses",
     "provider_classes",
     "agent_model_for",

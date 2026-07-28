@@ -135,9 +135,10 @@ class NoteScannerAgent(BaseAgent):
     # --- Graph wiring (compiled once per instance) ---
     def _wire_graph(self, workflow: StateGraph) -> None:
         workflow.add_node("initialize", self.initialize)
-        workflow.add_node("detect_concepts", self.detect_concepts)
-        workflow.add_node("summarize_note", self.summarize_note)
-        workflow.add_node("get_cancer_mentions", self.get_cancer_mentions)
+        # All three scan nodes call the model; each retries its own request.
+        workflow.add_node("detect_concepts", self.detect_concepts, retry_policy=self.retry_policy)
+        workflow.add_node("summarize_note", self.summarize_note, retry_policy=self.retry_policy)
+        workflow.add_node("get_cancer_mentions", self.get_cancer_mentions, retry_policy=self.retry_policy)
 
         workflow.add_edge(START, "initialize")
         workflow.add_edge("initialize", "summarize_note")

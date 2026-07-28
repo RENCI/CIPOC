@@ -1,23 +1,8 @@
-import json
-
-from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_openai import ChatOpenAI
-from openai import OpenAI, RateLimitError
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Literal, Any
+from typing import Literal
 
 from .base import BaseAgentModel, LLMConfig
-
-
-DEFAULT_LIMITER_SETTINGS = {
-    "max_retries": 10,
-    "initial_delay": 1.0,
-    "exponential_base": 2.0,
-    "max_delay": 60.0,
-    "jitter": True,
-    "retry_on": (RateLimitError,),
-    "logger_name": None,
-}
 
 
 class OpenAIReasoning(BaseModel):

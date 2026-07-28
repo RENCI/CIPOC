@@ -182,7 +182,12 @@ class OrchestratorAgent(BaseAgent):
     def _wire_graph(self, workflow: StateGraph) -> None:
         extract_branch = self._build_extract_branch()
 
-        # Nodes
+        # No node here carries a retry policy. Every LLM call the orchestrator is
+        # responsible for happens inside a subagent's own graph, whose nodes
+        # already retry transient endpoint failures; retrying here as well would
+        # replay a whole scan or extraction — and multiply the attempt count —
+        # for one throttled request. The remaining nodes are deterministic, so a
+        # failure in them is a bug that should surface on the first attempt.
         workflow.add_node("initialize", self.initialize)
         workflow.add_node("scan_notes", self.scan_notes, destinations=("note_branch",))
         workflow.add_node("note_branch", self.note_branch)

@@ -323,9 +323,14 @@ class ExtractorAgent(BaseAgent):
 
     def _build_variable_branch(self):
         branch = StateGraph(VariableBranchState, output_schema=VariableBranchOutput)
-        branch.add_node("extract_individual_value", self.extract_individual_value)
+        branch.add_node(
+            "extract_individual_value", self.extract_individual_value, retry_policy=self.retry_policy
+        )
+        # validate_extraction is deterministic (data-dictionary lookup) — no retry.
         branch.add_node("validate_extraction", self.validate_extraction)
-        branch.add_node("repair_invalid_extraction", self.repair_invalid_extraction)
+        branch.add_node(
+            "repair_invalid_extraction", self.repair_invalid_extraction, retry_policy=self.retry_policy
+        )
         branch.add_node("complete_variable", self.complete_variable)
 
         branch.add_conditional_edges(
@@ -346,7 +351,13 @@ class ExtractorAgent(BaseAgent):
 
         workflow.add_node("initialize", self.initialize)
         workflow.add_node("load_notes", self.load_notes)
-        workflow.add_node("extract_group_values", self.extract_group_values, destinations=("variable_branch",))
+        workflow.add_node(
+            "extract_group_values",
+            self.extract_group_values,
+            destinations=("variable_branch",),
+            retry_policy=self.retry_policy,
+        )
+        # variable_branch is a subgraph; its own LLM nodes carry the retry policy.
         workflow.add_node("variable_branch", variable_branch)
         workflow.add_node("merge_variable_results", self.merge_variable_results)
 
