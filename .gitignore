@@ -7,3 +7,4 @@ __pycache__
 .venv
 planning/
 *.egg-info
+tests/test_outputs/
