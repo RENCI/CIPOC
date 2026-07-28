@@ -8,3 +8,5 @@ __pycache__
 planning/
 *.egg-info
 tests/test_outputs/
+documents/manuals
+documents/markdown
