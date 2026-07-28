@@ -20,6 +20,8 @@ from cipoc.models import (
     VariableGroupOutput,
     VariableInfo,
     VariableOutput,
+    ValidatedVariableOutput,
+    ValidatedVariableGroupOutput,
 )
 from cipoc.prompts import (
     EXTRACTOR_SYSTEM_PROMPT,
@@ -36,21 +38,7 @@ from .base import BaseAgent
 # Graph state
 class ExtractorInput(BaseModel):
     requested_variables: VariableGroupInfo = Field(description="The target variable(s) to extract from the clinical notes.")
-
-
-class ValidatedVariableOutput(VariableOutput):
-    """A VariableOutput carrying the pipeline's validation verdict.
-
-    Built by the extractor after validation; never use as an LLM structured-output
-    schema, or the model will be asked to fill in the verdict fields itself.
-    """
-    is_valid: bool = Field(description="Whether the emitted result passed validation; False means it exhausted its repair attempts still failing.")
-    validation_errors: list[str] = Field(default_factory=list)
-    extraction_attempts: int = 0
-
-
-class ValidatedVariableGroupOutput(VariableGroupOutput):
-    variables: list[ValidatedVariableOutput] = Field(description="List of coded values for each variable in group, with validation verdicts.")
+    notes: list[ClinicalNote] = Field(description="Corpus of relevant clinical notes for deriving coded value(s).")
 
 
 class ExtractorOutput(BaseModel):
@@ -59,8 +47,7 @@ class ExtractorOutput(BaseModel):
 
 class ExtractorState(ExtractorInput, ExtractorOutput):
     messages: Annotated[list[AnyMessage], add_messages]
-    notes: list[ClinicalNote] | None = Field(default=None, description="Corpus of relevant clinical notes for deriving coded value(s).")
-    max_extraction_attempts: int = Field(default=2, description="Maximum number of attempts to repair an invalid extraction.")
+    max_extraction_attempts: int = Field(default=3, description="Maximum number of attempts to repair an invalid extraction.")
     variable_results: Annotated[list[ValidatedVariableOutput], add] = Field(default_factory=list)
 
 
@@ -103,20 +90,20 @@ class ExtractorAgent(BaseAgent):
         """Seed the conversation with the shared persona and the variables to extract."""
         return {"messages": [SystemMessage(EXTRACTOR_SYSTEM_PROMPT)]}
 
-    # TODO: need to create the database and tooling for this step. For now, just retrieve all the synthetic notes from `tests/fixtures/`
-    def retrieve_clinical_notes(self, state: ExtractorState) -> dict:
-        """Retrieve clinical notes containing information relevant to the desired variables"""
-        note_path = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "note_bundle.json"
-        with open(note_path, "r") as f:
-            notes = [ClinicalNote(**note) for note in json.load(f)]
+    def load_notes(self, state: ExtractorState) -> dict:
+        """Inject the caller-supplied notes into the conversation.
 
-        note_string = "\n".join(note.model_dump_json() for note in notes)
-        return {"notes": notes, "messages": [HumanMessage("Clinical notes:\n" + note_string)]}
+        Notes now arrive via ``ExtractorInput`` (selected upstream by the
+        orchestrator's retrieve step); this node only serializes them into the
+        message stream so the extraction prompts can see them.
+        """
+        note_string = "\n".join(note.model_dump_json() for note in state.notes)
+        return {"messages": [HumanMessage("Clinical notes:\n" + note_string)]}
 
     def variables_to_extract(self, state: ExtractorState) -> Literal["extract_group_values"] | list[Send]:
         variables = state.requested_variables.variables
 
-        if len(variables) > 1 and state.requested_variables.extract_group:
+        if len(variables) > 1 and state.requested_variables.extract_as_group:
             return "extract_group_values"
 
         return [
@@ -133,9 +120,8 @@ class ExtractorAgent(BaseAgent):
         ]
 
     def extract_group_values(self, state: ExtractorState) -> Command[Literal["variable_branch"]]:
-        group_output = self.agent.model.with_structured_output(
-            VariableGroupOutput
-        ).invoke(
+        group_output = self.agent.structured(
+            VariableGroupOutput,
             state.messages
             + [
                 HumanMessage(
@@ -143,7 +129,7 @@ class ExtractorAgent(BaseAgent):
                     + state.requested_variables.model_dump_json()
                 ),
                 HumanMessage(EXTRACT_GROUP_VALUES_PROMPT),
-            ]
+            ],
         )
 
         output_counts = Counter(output.item_id for output in group_output.variables)
@@ -189,6 +175,7 @@ class ExtractorAgent(BaseAgent):
                 item_id=variable.item_id,
                 value=None,
                 explanation="No extraction result was produced for this variable.",
+                most_important_note=None,
                 spans=[],
                 presence_confidence=ConfidenceLevel.LOW,
                 is_valid=False,
@@ -210,12 +197,13 @@ class ExtractorAgent(BaseAgent):
 
     def extract_individual_value(self, state: VariableBranchState) -> dict:
         """Extract one variable from the clinical notes."""
-        extracted_value = self.agent.model.with_structured_output(VariableOutput).invoke(
+        extracted_value = self.agent.structured(
+            VariableOutput,
             state.messages
             + [
                 HumanMessage("Variable to extract:\n" + state.task.variable.model_dump_json()),
                 HumanMessage(EXTRACT_VARIABLE_VALUE_PROMPT),
-            ]
+            ],
         )
         return {
             "task": state.task.model_copy(
@@ -251,9 +239,21 @@ class ExtractorAgent(BaseAgent):
                     errors.append(
                         f"Supporting text span {index} contains newline characters."
                     )
-                if not any(span.text in note.content for note in state.notes):
+                # Compare loosely on str form so an int note_id and its string
+                # rendering match; the note this span cites must exist and must
+                # actually contain the quoted text.
+                cited_notes = [
+                    note for note in state.notes if str(note.note_id) == str(span.id)
+                ]
+                if not cited_notes:
                     errors.append(
-                        f"Supporting text span {index} is not verbatim text from a clinical note."
+                        f"Supporting text span {index} cites note id '{span.id}', which is "
+                        "not one of the provided notes; set id to the note_id the text was "
+                        "copied from."
+                    )
+                elif not any(span.text in note.content for note in cited_notes):
+                    errors.append(
+                        f"Supporting text span {index} is not verbatim text from note {span.id}."
                     )
 
         return {
@@ -288,8 +288,9 @@ class ExtractorAgent(BaseAgent):
                 else None
             ),
         }
-        repaired_value = self.agent.model.with_structured_output(VariableOutput).invoke(
-            state.messages + [HumanMessage(REPAIR_VARIABLE_VALUE_PROMPT + "\nRepair context:\n" + json.dumps(repair_context))]
+        repaired_value = self.agent.structured(
+            VariableOutput,
+            state.messages + [HumanMessage(REPAIR_VARIABLE_VALUE_PROMPT + "\nRepair context:\n" + json.dumps(repair_context))],
         )
 
         return {
@@ -308,6 +309,7 @@ class ExtractorAgent(BaseAgent):
             item_id=state.task.variable.item_id,
             explanation="No extraction candidate was produced after the allowed attempts.",
             value=None,
+            most_important_note=None,
             spans=[],
             presence_confidence=ConfidenceLevel.LOW,
         )
@@ -343,15 +345,15 @@ class ExtractorAgent(BaseAgent):
         variable_branch = self._build_variable_branch()
 
         workflow.add_node("initialize", self.initialize)
-        workflow.add_node("retrieve_clinical_notes", self.retrieve_clinical_notes)
+        workflow.add_node("load_notes", self.load_notes)
         workflow.add_node("extract_group_values", self.extract_group_values, destinations=("variable_branch",))
         workflow.add_node("variable_branch", variable_branch)
         workflow.add_node("merge_variable_results", self.merge_variable_results)
 
         workflow.add_edge(START, "initialize")
-        workflow.add_edge("initialize", "retrieve_clinical_notes")
+        workflow.add_edge("initialize", "load_notes")
         workflow.add_conditional_edges(
-            "retrieve_clinical_notes",
+            "load_notes",
             self.variables_to_extract,
             ["extract_group_values", "variable_branch"],
         )
@@ -361,40 +363,26 @@ class ExtractorAgent(BaseAgent):
     # --- Public API ---
     def run(
         self,
-        item_ids: int | list[int],
+        extractor_input: ExtractorInput | dict,
         *,
-        extract_group: bool = False,
-        case_facts: CaseFacts | None = None,
-        rules_dir: str | Path | None = None,
+        progress: bool = True,
     ) -> ExtractorOutput:
-        """Extract coded values for the given NAACCR item ID(s) from the clinical notes.
+        """Extract coded values for the requested variables from the given notes.
 
-        Pass ``case_facts`` to scope manual coding instructions and valid codes to
-        the case deterministically. The rule store is read from ``rules_dir`` when
-        given, else from the config's ``documents.rules_path``; without either,
-        variables carry unscoped data-dictionary metadata only.
+        Both the variables (already scoped upstream) and the relevant notes
+        (already selected upstream) are supplied via ``ExtractorInput``; this
+        agent no longer looks up the data dictionary or retrieves notes itself.
         """
-        rule_store = None
-        if case_facts is not None:
-            rules_path = rules_dir or getattr(self._config.documents(), "rules_path", None)
-            if rules_path is not None:
-                rule_store = load_rule_store(rules_path)
-
-        variable_group = build_variable_group(
-            item_ids,
-            data_dictionary_path=self._config.documents().data_dictionary_path,
-            case_facts=case_facts,
-            rule_store=rule_store,
-        )
-        if not variable_group.variables:
-            raise ValueError("None of the requested item IDs exist in the data dictionary.")
-        variable_group = variable_group.model_copy(update={"extract_group": extract_group})
-        # result = self._graph.invoke({"requested_variables": variable_group})
-        result = run_with_progress(
-            self._graph,
-            {"requested_variables": variable_group},
-            subgraphs=True,
-            description="Extractor",
+        result = (
+            run_with_progress(
+                self._graph,
+                extractor_input,
+                subgraphs=True,
+                description="Extractor",
+                show_branches=True,
+            )
+            if progress
+            else self._graph.invoke(extractor_input)
         )
         return ExtractorOutput(**result)
 
@@ -402,8 +390,24 @@ class ExtractorAgent(BaseAgent):
 if __name__ == "__main__":
     agent = ExtractorAgent()
     agent.draw(path="src/cipoc/agents/visualization/extractor.png")
+
     # Case facts matching tests/fixtures/note_bundle.json (left breast, dx 2025);
-    # scopes coding instructions and valid codes from documents/rules.
-    facts = CaseFacts(primary_site="C504", date_of_diagnosis="2025-02-24", sex="female")
-    result = agent.run([400, 410, 522], case_facts=facts)  # Primary Site, Laterality, Histology
-    print(json.dumps(result.model_dump(), indent=2))
+    # scopes coding instructions and valid codes from documents/rules. The gross
+    # site is what note characterization yields; primary_site stays unset because
+    # item 400 is one of the variables being extracted here.
+    facts = CaseFacts(gross_primary_site="breast", date_of_diagnosis="2025-02-24", sex="female")
+    rules_path = getattr(agent._config.documents(), "rules_path", None)
+    rule_store = load_rule_store(rules_path) if rules_path is not None else None
+    variable_group = build_variable_group(
+        [400, 410, 522],  # Primary Site, Laterality, Histology
+        data_dictionary_path=agent._config.documents().data_dictionary_path,
+        case_facts=facts,
+        rule_store=rule_store,
+    )
+
+    note_path = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "note_bundle.json"
+    with open(note_path, "r") as f:
+        notes = [ClinicalNote(**note) for note in json.load(f)]
+
+    result = agent.run(ExtractorInput(requested_variables=variable_group, notes=notes))
+    # print(json.dumps(result.model_dump(), indent=2))
