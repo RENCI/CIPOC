@@ -3,16 +3,24 @@ from enum import Enum
 from pydantic import BaseModel, Field
 
 
-class TextSpan(BaseModel):
-    text: str = Field(description="Verbatim text snippet from a document that provides evidence for a claim.")
-    # text: StrippedStr = Field(description="Verbatim text snippet from a document that provides evidence for a claim.")
-
-
 class ConfidenceLevel(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
     MAX = "max"
+
+    @classmethod
+    def _to_int(cls, obj: "ConfidenceLevel") -> int:
+        return {level: i for i, level in enumerate(cls)}[obj]
+    
+    def __int__(self) -> int:
+        return self._to_int(self)
+
+    def __lt__(self, other: "ConfidenceLevel"):
+        return int(self) < int(other)
+    
+    def __gt__(self, other: "ConfidenceLevel"):
+        return int(self) > int(other)
 
     @property
     def definition(self) -> str:
