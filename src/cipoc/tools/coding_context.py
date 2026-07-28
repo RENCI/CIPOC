@@ -48,7 +48,13 @@ def load_rule_store(rules_dir: str | Path, *, use_cache: bool = True) -> RuleSto
     manifest = RuleStoreManifest.model_validate_json((path / "manifest.json").read_text())
 
     units: list[RuleUnit] = []
-    for file in sorted(p for p in path.rglob("*.json") if p.name != "manifest.json"):
+    # Only bare `<stem>.json` files are rule lists; compile sidecars carry a
+    # compound suffix (`.usage.json`, `.review.json`, ...) and must be skipped.
+    rule_files = (
+        p for p in path.rglob("*.json")
+        if p.name != "manifest.json" and p.suffixes == [".json"]
+    )
+    for file in sorted(rule_files):
         units.extend(_RULE_LIST_ADAPTER.validate_json(file.read_text()))
 
     unknown_sources = sorted({u.source_doc for u in units if manifest.get(u.source_doc) is None})
@@ -122,6 +128,83 @@ def normalize_histology(code: str | None) -> str | None:
     return text if re.fullmatch(r"\d{4}", text) else None
 
 
+# Tissue-level location -> ICD-O-3 topography ranges, covering the organ groups
+# enumerated for item 400 in the data dictionary. Note characterization yields a
+# gross location ('breast'), not a topography code; this table is what lets that
+# scope rules deterministically. Keys are matched longest-first as substrings of
+# the gross site text, so 'small intestine' wins over 'intestine' and laterality
+# or qualifiers ('upper outer left breast') do not defeat the match.
+GROSS_SITE_RANGES: dict[str, list[str]] = {
+    "small intestine": ["C170-C179"],
+    "duodenum": ["C170"],
+    "jejunum": ["C171"],
+    "ileum": ["C172"],
+    "colon": ["C180-C189"],
+    "cecum": ["C180"],
+    "appendix": ["C181"],
+    "rectosigmoid": ["C199"],
+    "liver": ["C220"],
+    "intrahepatic bile duct": ["C221"],
+    "pancreas": ["C250-C259"],
+    "lung": ["C340-C349"],
+    "bronchus": ["C340-C349"],
+    "breast": ["C500-C509"],
+    "corpus uteri": ["C540-C549"],
+    "endometrium": ["C541"],
+    "myometrium": ["C542"],
+    "uterus": ["C540-C549", "C550-C559"],
+    "ovary": ["C569"],
+    "prostate": ["C619"],
+}
+
+_GROSS_SITE_KEYS = sorted(GROSS_SITE_RANGES, key=len, reverse=True)
+
+
+def resolve_gross_site(gross_site: str | None) -> list[str] | None:
+    """Map a tissue-level location to ICD-O-3 topography ranges; None if unrecognized.
+
+    Unrecognized text returns None so that scoping widens rather than narrows:
+    a gross site we cannot map must not silently exclude every rule.
+    """
+    if not gross_site:
+        return None
+    text = " ".join(gross_site.split()).casefold()
+    for key in _GROSS_SITE_KEYS:
+        if key in text:
+            return GROSS_SITE_RANGES[key]
+    return None
+
+
+def _range_bounds(entry: str, normalize) -> tuple[int, int] | None:
+    low, _, high = entry.partition("-")
+    low_norm = normalize(low)
+    if low_norm is None:
+        return None
+    high_norm = normalize(high) if high else low_norm
+    if high_norm is None:
+        return None
+    return (
+        int(re.sub(r"[^0-9]", "", low_norm)),
+        int(re.sub(r"[^0-9]", "", high_norm)),
+    )
+
+
+def ranges_overlap(left: list[str], right: list[str], normalize=normalize_site) -> bool:
+    """True when any code range on the left intersects any range on the right.
+
+    Used to test a coarse case scope (e.g. breast, C500-C509) against a rule's
+    applicability. Overlap rather than containment is the right test: a rule
+    scoped to one quadrant still applies to a case only known to be breast.
+    """
+    left_bounds = [b for b in (_range_bounds(e, normalize) for e in left) if b is not None]
+    right_bounds = [b for b in (_range_bounds(e, normalize) for e in right) if b is not None]
+    return any(
+        lo_l <= hi_r and lo_r <= hi_l
+        for lo_l, hi_l in left_bounds
+        for lo_r, hi_r in right_bounds
+    )
+
+
 def _code_in_ranges(numeric: int, ranges: list[str], normalize) -> bool:
     for entry in ranges:
         low, _, high = entry.partition("-")
@@ -164,8 +247,15 @@ def matches_case(applies_to: RuleApplicability | None, case_facts: CaseFacts) ->
         return True
 
     site = normalize_site(case_facts.primary_site)
-    if applies_to.sites and site is not None and not site_in_ranges(site, applies_to.sites):
-        return False
+    if applies_to.sites and site is not None:
+        if not site_in_ranges(site, applies_to.sites):
+            return False
+    elif applies_to.sites:
+        # No coded topography (the usual case while Primary Site is still being
+        # extracted): fall back to the gross location from note characterization.
+        gross_ranges = resolve_gross_site(case_facts.gross_primary_site)
+        if gross_ranges is not None and not ranges_overlap(gross_ranges, applies_to.sites):
+            return False
 
     histology = normalize_histology(case_facts.histology)
     if applies_to.histologies and histology is not None and not histology_in_ranges(histology, applies_to.histologies):

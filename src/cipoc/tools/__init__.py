@@ -1,6 +1,27 @@
 """Tool definitions and helpers for CIPOC."""
 
-from .extraction import VariableValueValidator, lookup_variable_info, build_variable_group
+from .extraction import (
+    VariableValueValidator,
+    lookup_variable_info,
+    build_variable_group,
+)
+from .orchestration import (
+    load_variable_groups,
+    corpus_gate_passes,
+    CORPUS_GATE_PREDICATES,
+    note_matches_filter,
+    prefilter_notes,
+    build_corpus_descriptors,
+    build_corpus_digests,
+    site_applies,
+    eligible_groups,
+    pending_group,
+    resolve_leftovers,
+    derive_case_facts,
+    not_found_results,
+    to_case_results,
+    build_report,
+)
 from .coding_context import (
     RuleStore,
     load_rule_store,
@@ -17,6 +38,21 @@ __all__ = [
     "VariableValueValidator",
     "lookup_variable_info",
     "build_variable_group",
+    "load_variable_groups",
+    "corpus_gate_passes",
+    "CORPUS_GATE_PREDICATES",
+    "note_matches_filter",
+    "prefilter_notes",
+    "build_corpus_descriptors",
+    "build_corpus_digests",
+    "site_applies",
+    "eligible_groups",
+    "pending_group",
+    "resolve_leftovers",
+    "derive_case_facts",
+    "not_found_results",
+    "to_case_results",
+    "build_report",
     "RuleStore",
     "load_rule_store",
     "applicable_sources",
