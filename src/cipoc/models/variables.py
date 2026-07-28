@@ -28,12 +28,7 @@ class VariableGroupInfo(BaseModel):
 
 
 class CorpusGate(str, Enum):
-    """Deterministic gate conditions evaluated against note-corpus characteristics.
-
-    Each member names a boolean characteristic on ``NoteCorpusDescriptors``; the
-    predicate that reads it lives in ``cipoc.tools.orchestration`` to keep this
-    model free of evaluation logic.
-    """
+    """Deterministic gate conditions evaluated against note-corpus characteristics."""
     METASTASIS_PRESENT = "metastasis_present"
     TREATMENT_PRESENT = "treatment_present"
     LYMPH_NODES_REMOVED = "lymph_nodes_removed"
@@ -46,15 +41,7 @@ class SiteApplicability(BaseModel):
 
 
 class NoteFilter(BaseModel):
-    """Deterministic note-level hard filter narrowing a group's candidate notes.
-
-    Evaluated against each ``ProcessedClinicalNote`` in the ``prefilter_notes``
-    stage of the selection funnel — before the retriever ever sees a digest. A
-    note must satisfy *every* constraint that is set; a constraint left
-    empty/``None`` imposes no restriction, so an all-empty filter passes every
-    note. Constraints are additive: new filter dimensions can be introduced as
-    further optional fields without changing existing configs or callers.
-    """
+    """Deterministic note-level hard filter narrowing a group's candidate notes."""
     note_types: list[str] = Field(default_factory=list, description="Allowed note types; a note passes when its type case-insensitively equals one of these. Empty means any type.")
     keywords: list[str] = Field(default_factory=list, description="Keyword stems; a note passes when any stem is a case-insensitive substring of one of its flags or of its summary. Empty means no keyword restriction.")
     cancer_status: list[CancerStatus] = Field(default_factory=list, description="Allowed cancer temporality statuses; a note passes when its cancer_status set intersects these. Empty means no status restriction.")
@@ -62,12 +49,7 @@ class NoteFilter(BaseModel):
 
 
 class TargetGroup(VariableGroupInfo):
-    """A planned extraction group: a variable group plus deterministic orchestration gating.
-
-    Subclasses ``VariableGroupInfo`` so it flows through case state and seeding
-    unchanged; the extra fields drive orchestration only and must not be sent to
-    the extractor (materialize a plain ``VariableGroupInfo`` for that).
-    """
+    """A planned extraction group: a variable group plus deterministic orchestration gating."""
     stage: str | None = Field(default=None, description="'initial' runs first and scopes later groups; 'dependent' runs afterward.")
     gate: list[CorpusGate] | None = Field(default=None, description="Corpus conditions that must all hold for the group to be extracted. None or empty means ungated.")
     applies_to: SiteApplicability | None = Field(default=None, description="Site/histology restriction; None means the group applies to all cases.")
@@ -98,11 +80,7 @@ class VariableGroupOutput(BaseModel):
 
 
 class ValidatedVariableOutput(VariableOutput):
-    """A VariableOutput carrying the pipeline's validation verdict.
-
-    Built by the extractor after validation; never use as an LLM structured-output
-    schema, or the model will be asked to fill in the verdict fields itself.
-    """
+    """A VariableOutput carrying the pipeline's validation verdict."""
     is_valid: bool = Field(description="Whether the emitted result passed validation; False means it exhausted its repair attempts still failing.")
     validation_errors: list[str] = Field(default_factory=list)
     extraction_attempts: int = 0
