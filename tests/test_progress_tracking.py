@@ -1,121 +1,342 @@
 import io
 import os
-import re
+import threading
 import unittest
+from unittest.mock import patch
 
 from cipoc.agents.extractor import ExtractorAgent
 from cipoc.agents.note_retriever import NoteRetrieverAgent
 from cipoc.agents.note_scanner import NoteScannerAgent
 from cipoc.models import ClinicalNote
-from cipoc.tools import load_variable_groups
-from cipoc.utils.progress_tracking import _OrchestratorProgressDisplay
+from cipoc.utils.progress.renderers import AnsiAltScreen, NotebookDisplay, PlainLog
+from cipoc.utils.progress.runner import _select_renderer, run_with_progress
 
 
-class OrchestratorProgressDisplayTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.groups = load_variable_groups("config/variable_groups.json")
-        cls.item_ids = [
-            str(variable.item_id)
-            for group in cls.groups
-            for variable in group.variables
+class _TTY(io.StringIO):
+    def isatty(self):
+        return True
+
+
+class _Graph:
+    def __init__(self, events, error=None):
+        self.events = events
+        self.error = error
+        self.calls = []
+
+    def stream(self, graph_input, **kwargs):
+        self.calls.append((graph_input, kwargs))
+        yield from self.events
+        if self.error is not None:
+            raise self.error
+
+
+class _RecordingRenderer:
+    min_interval = 0.01
+
+    def __init__(self):
+        self.paints = []
+        self.closed = False
+
+    def paint(self, snapshot, **kwargs):
+        self.paints.append((snapshot, kwargs))
+        return True
+
+    def close(self):
+        self.closed = True
+
+
+class _BrokenRenderer(_RecordingRenderer):
+    def paint(self, snapshot, **kwargs):
+        raise OSError("display failed")
+
+    def close(self):
+        raise OSError("close failed")
+
+
+class _BlockedRenderer(_RecordingRenderer):
+    def __init__(self):
+        super().__init__()
+        self.release = threading.Event()
+        self.close_finished = threading.Event()
+
+    def paint(self, snapshot, **kwargs):
+        self.release.wait()
+        return super().paint(snapshot, **kwargs)
+
+    def close(self):
+        super().close()
+        self.close_finished.set()
+
+
+class _InterruptedCloseRenderer(_RecordingRenderer):
+    def __init__(self):
+        super().__init__()
+        self.close_calls = 0
+
+    def close(self):
+        self.close_calls += 1
+        if self.close_calls == 1:
+            raise KeyboardInterrupt("during close")
+        super().close()
+
+
+class RendererSelectionTests(unittest.TestCase):
+    def test_notebook_wins_over_terminal(self):
+        renderer = _select_renderer(
+            _TTY(),
+            notebook=True,
+            size_provider=lambda: os.terminal_size((80, 24)),
+        )
+        self.assertIsInstance(renderer, NotebookDisplay)
+
+    def test_usable_terminal_gets_alternate_screen(self):
+        renderer = _select_renderer(
+            _TTY(),
+            notebook=False,
+            size_provider=lambda: os.terminal_size((80, 12)),
+        )
+        self.assertIsInstance(renderer, AnsiAltScreen)
+
+    def test_redirected_or_short_terminal_gets_plain_log(self):
+        self.assertIsInstance(
+            _select_renderer(io.StringIO(), notebook=False),
+            PlainLog,
+        )
+        self.assertIsInstance(
+            _select_renderer(
+                _TTY(),
+                notebook=False,
+                size_provider=lambda: os.terminal_size((80, 11)),
+            ),
+            PlainLog,
+        )
+
+
+class ProgressRunnerTests(unittest.TestCase):
+    def test_streams_tasks_and_values_and_returns_last_root_state(self):
+        result = {"answer": 42}
+        graph = _Graph(
+            [
+                ("tasks", {"id": "1", "name": "initialize", "input": {}}),
+                (
+                    "tasks",
+                    {
+                        "id": "1",
+                        "name": "initialize",
+                        "result": {},
+                        "error": None,
+                    },
+                ),
+                ("values", result),
+            ]
+        )
+        renderer = _RecordingRenderer()
+
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=renderer,
+        ):
+            actual = run_with_progress(graph, {"input": True}, description="Test")
+
+        self.assertIs(actual, result)
+        self.assertEqual(
+            graph.calls,
+            [
+                (
+                    {"input": True},
+                    {"stream_mode": ["values", "tasks"], "subgraphs": False},
+                )
+            ],
+        )
+        final_snapshot, final_kwargs = renderer.paints[-1]
+        self.assertTrue(final_snapshot.finished)
+        self.assertEqual(final_snapshot.nodes[0].state, "ok")
+        self.assertTrue(final_kwargs["final"])
+        self.assertTrue(renderer.closed)
+
+    def test_keyboard_interrupt_marks_final_snapshot_and_closes_renderer(self):
+        graph = _Graph([], KeyboardInterrupt("cancelled"))
+        renderer = _RecordingRenderer()
+
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=renderer,
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                run_with_progress(graph, {})
+
+        snapshot, kwargs = renderer.paints[-1]
+        self.assertEqual(snapshot.fatal, "cancelled")
+        self.assertTrue(snapshot.finished)
+        self.assertTrue(kwargs["final"])
+        self.assertTrue(renderer.closed)
+
+    def test_renderer_failure_does_not_replace_result_or_graph_error(self):
+        successful = _Graph([("values", {"answer": 1})])
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=_BrokenRenderer(),
+        ):
+            self.assertEqual(run_with_progress(successful, {}), {"answer": 1})
+
+        failing = _Graph([], ValueError("graph failed"))
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=_BrokenRenderer(),
+        ):
+            with self.assertRaisesRegex(ValueError, "graph failed"):
+                run_with_progress(failing, {})
+
+    def test_thread_start_failure_does_not_prevent_graph_run(self):
+        graph = _Graph([("values", {"answer": 1})])
+        renderer = _RecordingRenderer()
+
+        with (
+            patch(
+                "cipoc.utils.progress.runner._select_renderer",
+                return_value=renderer,
+            ),
+            patch(
+                "cipoc.utils.progress.runner._RepaintLoop.start",
+                side_effect=RuntimeError("no threads"),
+            ),
+        ):
+            self.assertEqual(run_with_progress(graph, {}), {"answer": 1})
+
+        self.assertTrue(renderer.closed)
+        self.assertTrue(renderer.paints[-1][1]["final"])
+
+    def test_blocked_renderer_does_not_block_graph_return(self):
+        graph = _Graph([("values", {"answer": 1})])
+        renderer = _BlockedRenderer()
+        try:
+            with (
+                patch(
+                    "cipoc.utils.progress.runner._select_renderer",
+                    return_value=renderer,
+                ),
+                patch("cipoc.utils.progress.runner._REPAINT_JOIN_TIMEOUT", 0.02),
+            ):
+                self.assertEqual(run_with_progress(graph, {}), {"answer": 1})
+            self.assertFalse(renderer.closed)
+        finally:
+            renderer.release.set()
+
+        self.assertTrue(renderer.close_finished.wait(1.0))
+
+    def test_close_interruption_is_retried_after_terminal_restore(self):
+        graph = _Graph([("values", {"answer": 1})])
+        renderer = _InterruptedCloseRenderer()
+
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=renderer,
+        ):
+            with self.assertRaisesRegex(KeyboardInterrupt, "during close"):
+                run_with_progress(graph, {})
+
+        self.assertEqual(renderer.close_calls, 2)
+        self.assertTrue(renderer.closed)
+
+    def test_show_branches_controls_synthetic_variable_table(self):
+        graph_input = {
+            "requested_variables": {
+                "group_id": "group",
+                "name": "Group",
+                "variables": [{"item_id": 390, "name": "Date of Diagnosis"}],
+            }
+        }
+        graph = _Graph([("values", {"relevant_note_ids": [1]})])
+        compact = _RecordingRenderer()
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=compact,
+        ):
+            run_with_progress(graph, graph_input, show_branches=False)
+        self.assertEqual(compact.paints[-1][0].mode, "compact")
+
+        table = _RecordingRenderer()
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=table,
+        ):
+            run_with_progress(graph, graph_input, show_branches=True)
+        self.assertEqual(table.paints[-1][0].mode, "standalone")
+        self.assertEqual(table.paints[-1][0].total_variables, 1)
+
+    def test_plain_log_keeps_fast_intermediate_transitions(self):
+        stream = io.StringIO()
+        graph = _Graph(
+            [
+                ("tasks", {"id": "1", "name": "initialize", "input": {}}),
+                (
+                    "tasks",
+                    {"id": "1", "name": "initialize", "result": {}, "error": None},
+                ),
+                ("values", {"answer": 1}),
+            ]
+        )
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=PlainLog(stream),
+        ):
+            run_with_progress(graph, {}, description="Fast")
+
+        lines = stream.getvalue().splitlines()
+        self.assertIn("node initialize [deterministic]: running (0/1)", lines)
+        self.assertIn("node initialize [deterministic]: complete (1/1)", lines)
+
+    def test_alternate_screen_restores_before_expanded_summary(self):
+        stream = _TTY()
+        renderer = AnsiAltScreen(
+            stream,
+            color=False,
+            size_provider=lambda: os.terminal_size((80, 24)),
+        )
+        graph = _Graph(
+            [
+                (
+                    "values",
+                    {
+                        "variable_results": {
+                            390: {
+                                "status": "extracted",
+                                "value": "20260101",
+                            }
+                        }
+                    },
+                )
+            ]
+        )
+        groups = [
+            {
+                "group_id": "initial",
+                "name": "Initial",
+                "variables": [{"item_id": 390, "name": "Date of Diagnosis"}],
+            }
         ]
 
-    def display(self, stream=None):
-        return _OrchestratorProgressDisplay(
-            "Orchestrator",
-            {"note_corpus": {1: {}, 2: {}}},
-            self.groups,
-            stream=stream or io.StringIO(),
-        )
-
-    def render(self, columns, lines):
-        display = self.display()
-        display._terminal_size = lambda: os.terminal_size((columns, lines))
-        return display, display._render(final=False)
-
-    def test_every_item_renders_once_within_viewport(self):
-        for columns, height in ((80, 24), (120, 30)):
-            with self.subTest(size=(columns, height)):
-                _, rendered = self.render(columns, height)
-                text = "\n".join(rendered)
-                self.assertLessEqual(len(rendered), height)
-                for item_id in self.item_ids:
-                    matches = re.findall(rf"(?<!\d){item_id}(?!\d)", text)
-                    self.assertEqual(len(matches), 1, item_id)
-
-    def test_names_expand_with_available_width(self):
-        _, compact = self.render(40, 24)
-        _, narrow = self.render(80, 24)
-        _, wide = self.render(120, 30)
-        self.assertNotIn("Date of Diagn", "\n".join(compact))
-        self.assertIn("Date o", "\n".join(narrow))
-        self.assertIn("Date of Diagnosis", "\n".join(wide))
-
-    def test_group_names_precede_their_variables(self):
-        _, rendered = self.render(120, 30)
-        text = "\n".join(rendered)
-        for group in self.groups:
-            self.assertEqual(text.count(f"[{group.name}]"), 1)
-            self.assertLess(text.index(f"[{group.name}]"), text.index(str(group.variables[0].item_id)))
-
-    def test_group_running_and_durable_status_updates(self):
-        display = self.display()
-        group = self.groups[0]
-        display.start(
-            "extract-1",
-            (),
-            "extract_branch",
-            {"requested_variables": group},
-        )
-        for variable in group.variables:
-            self.assertEqual(
-                display._display_status(display.variables[str(variable.item_id)]),
-                "running",
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=renderer,
+        ):
+            run_with_progress(
+                graph,
+                {},
+                description="Test",
+                target_groups=groups,
             )
 
-        statuses = [
-            "extracted",
-            "structured_data",
-            "not_found",
-            "not_applicable",
-            "blocked",
-            "error",
-        ]
-        results = {
-            int(item_id): {
-                "item_id": int(item_id),
-                "status": status,
-                "value": "1" if status in {"extracted", "structured_data"} else None,
-                "reason": "test reason" if status in {"blocked", "error"} else None,
-            }
-            for item_id, status in zip(self.item_ids, statuses)
-        }
-        display.update_values({"variable_results": results})
-        for item_id, status in zip(self.item_ids, statuses):
-            self.assertEqual(display.variables[item_id].status, status)
-            self.assertFalse(display.variables[item_id].running)
+        output = stream.getvalue()
+        self.assertIn("\x1b[?1049l", output)
+        summary = output.rsplit("\x1b[?1049l", 1)[1]
+        self.assertIn("Date of Diagnosis", summary)
+        self.assertIn("202601", summary)
+        self.assertNotIn("\x1b", summary)
 
-    def test_noninteractive_output_is_start_and_summary_only(self):
-        stream = io.StringIO()
-        display = self.display(stream)
-        display.draw()
-        display.start("initialize", (), "initialize", {})
-        display.finish("initialize", (), "initialize", {})
-        display.complete()
-        output = stream.getvalue().splitlines()
-        self.assertEqual(len(output), 2)
-        self.assertIn("52 variables", output[0])
-        self.assertIn("complete:", output[1])
 
-    def test_redraw_tracks_shorter_resized_dashboard(self):
-        stream = io.StringIO()
-        display = self.display(stream)
-        display._redraw_terminal(["x"] * 24)
-        display._redraw_terminal(["x"] * 20)
-        self.assertEqual(display._rendered_lines, 20)
-
-    def test_subagents_can_run_without_creating_progress_displays(self):
+class ProgressDisabledTests(unittest.TestCase):
+    def test_subagents_invoke_graph_without_creating_progress_displays(self):
         class FakeGraph:
             def __init__(self, result):
                 self.result = result
@@ -129,8 +350,7 @@ class OrchestratorProgressDisplayTests(unittest.TestCase):
 
         scanner = object.__new__(NoteScannerAgent)
         scanner._graph = FakeGraph({})
-        scanned = scanner.run(note, progress=False)
-        self.assertEqual(scanned.note_id, 1)
+        self.assertEqual(scanner.run(note, progress=False).note_id, 1)
 
         retriever = object.__new__(NoteRetrieverAgent)
         retriever._graph = FakeGraph({"relevant_note_ids": [1]})
