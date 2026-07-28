@@ -16,6 +16,12 @@ llm:
   base_url: ${AZURE_OPENAI_URL}
   api_key: ${RENCI_AZURE_API_KEY}
 
+  # Endpoint-wide concurrency cap. Bounds in-flight requests via a semaphore on
+  # the shared model wrapper. This is a property of the endpoint, not the agent:
+  # to make it a global cap, build one model from these defaults and inject it
+  # into every subagent (llm=). Omit or set null for unbounded.
+  max_concurrency: 8
+
   # Reasoning settings (OpenAI-style). Set to null to disable.
   reasoning:
     effort: medium          # "low", "medium", or "high"
@@ -42,3 +48,4 @@ documents:
   documents_path: documents/
   data_dictionary_path: documents/naaccr_data_dictionary_v25.json
   rules_path: documents/rules/
+  variable_groups_path: config/variable_groups.json
