@@ -185,5 +185,7 @@ if __name__ == "__main__":
         note_data = [note_data]
 
     result = [agent.run(note).model_dump() for note in note_data]
-    with open("/Users/satusky/Desktop/CIPOC/tests/scanner_test.json", "w") as f:
+    output_path = Path(__file__).resolve().parents[3] / "tests" / "test_outputs" / "scanner_test.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
         json.dump(result, f, indent=2)

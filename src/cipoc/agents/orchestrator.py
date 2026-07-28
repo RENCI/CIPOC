@@ -473,7 +473,8 @@ if __name__ == "__main__":
         raw_notes = json.load(f)
 
     case = agent.run(raw_notes, structured_data=structured_data)
-    result_path = Path(__file__).resolve().parents[3] / "tests" / "orchestrator_test.json"
+    result_path = Path(__file__).resolve().parents[3] / "tests" / "test_outputs" / "orchestrator_test.json"
+    result_path.parent.mkdir(parents=True, exist_ok=True)
     with open(result_path, "w") as f:
         json.dump(case.model_dump(), f, indent=2, default=str)
     # print(json.dumps(case.model_dump(), indent=2, default=str))

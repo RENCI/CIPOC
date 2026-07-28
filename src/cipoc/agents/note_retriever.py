@@ -102,10 +102,7 @@ if __name__ == "__main__":
     agent = NoteRetrieverAgent()
     agent.draw(path="src/cipoc/agents/visualization/note_retriever.png")
 
-    # Digests come from already-scanned notes; tests/scanner_test.json is the
-    # NoteScannerAgent's saved output over tests/fixtures/note_bundle.json. Only
-    # the digest fields (note_id/type/summary/flags) are read here.
-    scanned_path = Path(__file__).resolve().parents[3] / "tests" / "scanner_test.json"
+    scanned_path = Path(__file__).resolve().parents[3] / "tests" / "test_outputs" / "scanner_test.json"
     with open(scanned_path, "r") as f:
         digests = {note["note_id"]: NoteDigest(**note) for note in json.load(f)}
 
