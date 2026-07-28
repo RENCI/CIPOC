@@ -91,13 +91,23 @@ rationale-only prose), return an empty `units` list.
 """
 
 
-def _tagging_user_prompt(section: Section, default_applicability: RuleApplicability | None) -> str:
+def _tagging_user_prompt(
+    section: Section,
+    default_applicability: RuleApplicability | None,
+    item_ids: list[int] | None = None,
+) -> str:
     parts = [
         f"Section heading trail: {' > '.join(section.section_path)}",
     ]
     if default_applicability is not None:
         applies = default_applicability.model_dump(exclude_none=True)
         parts.append(f"Section-group default applicability (already assumed): {applies}")
+    if item_ids is not None:
+        parts.append(
+            f"Every unit in this manual governs NAACCR item(s) {item_ids}; this is assigned "
+            "for you, so leave `item_ids` empty and spend your attention on splitting and "
+            "classifying the units."
+        )
     parts.append("\nSection text:\n" + section.text)
     return "\n".join(parts)
 
@@ -129,14 +139,21 @@ def tag_section(
     source_doc: str,
     site_group: str,
     default_applicability: RuleApplicability | None = None,
+    item_ids: list[int] | None = None,
 ) -> list[RuleUnit]:
-    """Tag one section into zero or more fully-provenanced ``RuleUnit`` objects."""
+    """Tag one section into zero or more fully-provenanced ``RuleUnit`` objects.
+
+    ``item_ids`` overrides the model's per-unit item assignment. Pass it when the
+    manual governs a known fixed set of NAACCR items — Summary Stage 2018 is one
+    manual for one item (764), so asking the model to infer that per section only
+    creates a way for it to be wrong.
+    """
     from langchain.messages import HumanMessage, SystemMessage
 
     tagging: SectionTagging = llm.model.with_structured_output(SectionTagging).invoke(
         [
             SystemMessage(TAGGING_SYSTEM_PROMPT),
-            HumanMessage(_tagging_user_prompt(section, default_applicability)),
+            HumanMessage(_tagging_user_prompt(section, default_applicability, item_ids)),
         ]
     )
 
@@ -150,7 +167,7 @@ def tag_section(
                 section_path=list(section.section_path),
                 anchor=section.anchor,
                 kind=tagged.kind,
-                item_ids=tagged.item_ids,
+                item_ids=list(item_ids) if item_ids is not None else tagged.item_ids,
                 applies_to=_merge_applicability(tagged.applies_to, default_applicability),
                 text=re.sub(r"\*+", "", tagged.text).strip(),
                 codes=tagged.codes,

@@ -82,48 +82,38 @@ def _load_llm(agent: str):
     return agent_model_for(settings.provider)(settings)
 
 
-def compile_site_group(
+def compile_sections(
     *,
     manual: str,
     site_group: str,
-    root_heading: str,
-    boundary_heading: str | None,
+    sections: list,
     source_path: Path,
     data_dictionary_path: Path,
     default_applicability: RuleApplicability | None,
     llm,
-    root_level: int | None = None,
-    max_heading_level: int = 3,
+    item_ids: list[int] | None = None,
     show_progress: bool = False,
 ) -> tuple[list[RuleUnit], list, dict]:
-    """Segment, tag, and validate one site group.
+    """Tag and validate an explicit list of already-segmented sections.
 
-    Returns ``(units, validations, usage)``. ``usage`` is the token-count record
-    from ``_usage_summary`` covering every LLM call in the tagging loop, for cost
-    tracking; it reports zeros with ``usage_reported=False`` if the endpoint sent
-    no usage block.
+    The section-selection half of ``compile_site_group`` assumes a manual whose
+    site groups are one heading subtree each. Callers that derive their own
+    section spans — see ``compile_summary_stage``, which indexes chapters by line
+    range — hand the sections in directly here instead.
 
-    Set ``show_progress`` to render a per-section tqdm bar over the LLM tagging
-    loop (each section is one serial model call); left off for programmatic and
-    test callers.
+    ``item_ids``, when given, overrides the model's per-unit item assignment for
+    every unit compiled (see ``tag_section``).
     """
     from langchain_core.callbacks import get_usage_metadata_callback
 
     from .tag import tag_section
 
-    sections = segment_markdown(source_path.read_text(), max_heading_level=max_heading_level)
-    subtree = select_subtree(
-        sections, root_heading, boundary_heading_contains=boundary_heading, root_level=root_level
-    )
-    if not subtree:
-        raise SystemExit(f"No section matched root heading {root_heading!r} in {source_path}.")
-
-    taggable = [s for s in subtree if not any(skip in s.heading.casefold() for skip in _SKIP_HEADINGS)]
+    taggable = [s for s in sections if not any(skip in s.heading.casefold() for skip in _SKIP_HEADINGS)]
     progress = taggable
     if show_progress:
         from tqdm import tqdm
 
-        progress = tqdm(taggable, desc=f"tagging {site_group}", unit="section")
+        progress = tqdm(taggable, desc=f"tagging {site_group}", unit="section", leave=False)
 
     units: list[RuleUnit] = []
     with get_usage_metadata_callback() as usage_cb:
@@ -135,6 +125,7 @@ def compile_site_group(
                     section, llm,
                     source_doc=manual, site_group=site_group,
                     default_applicability=default_applicability,
+                    item_ids=item_ids,
                 )
             )
     usage = _usage_summary(
@@ -149,18 +140,106 @@ def compile_site_group(
     return units, validations, usage
 
 
-def _upsert_manifest(rules_dir: Path, manual: str, source_path: Path) -> None:
+def compile_site_group(
+    *,
+    manual: str,
+    site_group: str,
+    root_heading: str,
+    boundary_heading: str | None,
+    source_path: Path,
+    data_dictionary_path: Path,
+    default_applicability: RuleApplicability | None,
+    llm,
+    root_level: int | None = None,
+    max_heading_level: int = 3,
+    item_ids: list[int] | None = None,
+    show_progress: bool = False,
+) -> tuple[list[RuleUnit], list, dict]:
+    """Segment, tag, and validate one site group.
+
+    Returns ``(units, validations, usage)``. ``usage`` is the token-count record
+    from ``_usage_summary`` covering every LLM call in the tagging loop, for cost
+    tracking; it reports zeros with ``usage_reported=False`` if the endpoint sent
+    no usage block.
+
+    Set ``show_progress`` to render a per-section tqdm bar over the LLM tagging
+    loop (each section is one serial model call); left off for programmatic and
+    test callers.
+    """
+    sections = segment_markdown(source_path.read_text(), max_heading_level=max_heading_level)
+    subtree = select_subtree(
+        sections, root_heading, boundary_heading_contains=boundary_heading, root_level=root_level
+    )
+    if not subtree:
+        raise SystemExit(f"No section matched root heading {root_heading!r} in {source_path}.")
+
+    return compile_sections(
+        manual=manual, site_group=site_group, sections=subtree,
+        source_path=source_path, data_dictionary_path=data_dictionary_path,
+        default_applicability=default_applicability, llm=llm,
+        item_ids=item_ids, show_progress=show_progress,
+    )
+
+
+def upsert_manifest(
+    rules_dir: Path,
+    manual: str,
+    source_path: Path,
+    *,
+    defaults: dict | None = None,
+) -> None:
+    """Record this manual in the rule-store manifest, preserving existing fields.
+
+    ``defaults`` seeds a manual's descriptive fields on first compile; they are
+    set only when absent, so hand-edits to an existing entry survive a recompile.
+    """
     manifest_path = rules_dir / "manifest.json"
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
     entry = manifest.setdefault(manual, {})
-    entry.setdefault("title", manual)
-    entry.setdefault("family", "SEER")
-    entry.setdefault("publication_date", "2024-01-01")
+    for key, value in {
+        "title": manual, "family": "SEER", "publication_date": "2024-01-01",
+        **(defaults or {}),
+    }.items():
+        entry.setdefault(key, value)
     entry["source_markdown"] = str(source_path)
     from datetime import date
     entry["compiled_at"] = date.today().isoformat()
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+
+
+def write_outputs(
+    units: list[RuleUnit],
+    validations: list,
+    usage: dict,
+    *,
+    rules_dir: Path,
+    manual: str,
+    site_group: str,
+    source_path: Path,
+    manifest_defaults: dict | None = None,
+) -> tuple[Path, Path, Path, list[RuleUnit]]:
+    """Write the accepted units, review report, and usage record for one site group.
+
+    Only units that passed every validation are promoted into the store; the rest
+    stay quarantined in the review report. Returns the three paths written plus
+    the accepted units.
+    """
+    accepted_ids = {r.rule_id for r in validations if r.ok}
+    accepted = [u for u in units if u.rule_id in accepted_ids]
+
+    out_path = rules_dir / manual / f"{site_group}.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_bytes(_RULE_LIST_ADAPTER.dump_json(accepted, indent=2) + b"\n")
+    upsert_manifest(rules_dir, manual, source_path, defaults=manifest_defaults)
+
+    report_path = rules_dir / manual / f"{site_group}.review.txt"
+    report_path.write_text(build_report(units, validations, source_markdown_path=source_path))
+
+    usage_path = rules_dir / manual / f"{site_group}.usage.json"
+    usage_path.write_text(json.dumps(usage, indent=2) + "\n")
+
+    return out_path, report_path, usage_path, accepted
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -185,14 +264,25 @@ def main(argv: list[str] | None = None) -> None:
             "2018 MPH/STR split)."
         ),
     )
+    parser.add_argument("--histologies", nargs="*", default=None, help="Default applies_to histologies, e.g. 8000-8700 8982.")
+    parser.add_argument(
+        "--item-ids",
+        nargs="*",
+        type=int,
+        default=None,
+        help="Force every compiled unit to these NAACCR item IDs instead of letting the model "
+             "infer them. Use for a manual that governs one known item throughout.",
+    )
     parser.add_argument("--agent", default="note_scanner", help="Config agent whose LLM settings to use for tagging.")
     parser.add_argument("--max-heading-level", type=int, default=3)
     parser.add_argument("--dry-run", action="store_true", help="Segment and print the section plan; no LLM call.")
     args = parser.parse_args(argv)
 
     default_applicability = None
-    if args.sites or args.dx_date_min:
-        default_applicability = RuleApplicability(sites=args.sites, dx_date_min=args.dx_date_min)
+    if args.sites or args.histologies or args.dx_date_min:
+        default_applicability = RuleApplicability(
+            sites=args.sites, histologies=args.histologies, dx_date_min=args.dx_date_min
+        )
 
     if args.dry_run:
         sections = segment_markdown(args.source.read_text(), max_heading_level=args.max_heading_level)
@@ -212,26 +302,17 @@ def main(argv: list[str] | None = None) -> None:
         manual=args.manual, site_group=args.site_group,
         root_heading=args.root_heading, boundary_heading=args.boundary_heading,
         source_path=args.source, data_dictionary_path=args.data_dictionary,
-        default_applicability=default_applicability, llm=llm,
+        default_applicability=default_applicability, llm=llm, item_ids=args.item_ids,
         root_level=args.root_level, max_heading_level=args.max_heading_level, show_progress=True,
     )
 
-    accepted_ids = {r.rule_id for r in validations if r.ok}
-    accepted = [u for u in units if u.rule_id in accepted_ids]
+    out_path, report_path, usage_path, accepted = write_outputs(
+        units, validations, usage,
+        rules_dir=args.rules_dir, manual=args.manual,
+        site_group=args.site_group, source_path=args.source,
+    )
 
-    out_path = args.rules_dir / args.manual / f"{args.site_group}.json"
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes(_RULE_LIST_ADAPTER.dump_json(accepted, indent=2) + b"\n")
-    _upsert_manifest(args.rules_dir, args.manual, args.source)
-
-    report = build_report(units, validations, source_markdown_path=args.source)
-    report_path = args.rules_dir / args.manual / f"{args.site_group}.review.txt"
-    report_path.write_text(report)
-
-    usage_path = args.rules_dir / args.manual / f"{args.site_group}.usage.json"
-    usage_path.write_text(json.dumps(usage, indent=2) + "\n")
-
-    print(report)
+    print(report_path.read_text())
     if usage["usage_reported"]:
         print(f"\nTokens: {usage['total_tokens']:,} "
               f"(in {usage['input_tokens']:,} / out {usage['output_tokens']:,}) "
