@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from threading import Semaphore
+
 from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -9,6 +11,7 @@ class LLMConfig(BaseModel):
     model: str = Field(description="Name of LLM")
     api_key: SecretStr = Field(description="API key")
     base_url: str = Field(description="Base URL for model endpoint")
+    max_concurrency: int | None = Field(default=None, description="Max number of concurrent instances for specified endpoint.")
     provider: str | None = Field(default=None, description="Model provider (discriminator). Subclasses narrow this with a concrete default.")
     tools: list[StructuredTool] | None = Field(default=None, description="List of available tools")
     model_config = ConfigDict(protected_namespaces=())
@@ -18,12 +21,13 @@ class BaseAgentModel(ABC):
     _model: BaseChatModel
     _config: LLMConfig
     _tools: list[StructuredTool] | None
-    _non_model_fields: ClassVar[set[str]] = {"tools", "provider"}
+    _non_model_fields: ClassVar[set[str]] = {"tools", "provider", "max_concurrency"}
 
     def __init__(self, config: LLMConfig, **kwargs) -> None:
         self._config = config
         self._tools = kwargs.pop("tools") if "tools" in kwargs else self._config.tools
         self._model = self._initialize_model(**kwargs)
+        self._semaphore = Semaphore(self._config.max_concurrency) if self._config.max_concurrency else None
 
     @property
     def model(self) -> BaseChatModel:
@@ -41,21 +45,56 @@ class BaseAgentModel(ABC):
         ...
 
     def invoke(self, messages, *, config=None, stop=None, **kwargs):
-        result = self.model.invoke(
-            messages,
-            config,
-            stop=stop,
-            **kwargs
-        )
-        return result
+        if self._semaphore is None:
+            return self.model.invoke(
+                messages,
+                config,
+                stop=stop,
+                **kwargs
+            )
+
+        with self._semaphore:
+            return self.model.invoke(
+                messages,
+                config,
+                stop=stop,
+                **kwargs
+            )
 
     async def ainvoke(self, messages, *, config=None, stop=None, **kwargs):
-        result = await self.model.ainvoke(
+        return await self.model.ainvoke(
             messages,
             config,
             stop=stop,
             **kwargs
         )
-        return result
+
+    def structured(self, schema, messages, **kwargs):
+        """Invoke the model with structured output under the concurrency guard.
+
+        The single endpoint permit is held across the whole call, including any
+        ``ChatOpenAI`` retry/backoff inside ``.invoke`` — a throttled request keeps
+        occupying a slot until it resolves. Node call sites should route through
+        this rather than ``self.model.with_structured_output(...).invoke(...)``,
+        which bypasses the semaphore.
+        """
+        runnable = self.model.with_structured_output(schema)
+        if self._semaphore is None:
+            return runnable.invoke(messages, **kwargs)
+        with self._semaphore:
+            return runnable.invoke(messages, **kwargs)
+
+    async def astructured(self, schema, messages, **kwargs):
+        """Async sibling of :meth:`structured` — currently an unguarded passthrough.
+
+        The concurrency guard is intentionally omitted: acquiring the
+        ``threading.Semaphore`` across an ``await`` would block the event loop
+        whenever it had to wait for a permit. To bound the async path, swap
+        ``self._semaphore`` to an ``asyncio.Semaphore`` and guard with
+        ``async with self._semaphore:`` here. Until then the sync
+        :meth:`structured` path is the bounded one.
+        """
+        runnable = self.model.with_structured_output(schema)
+        return await runnable.ainvoke(messages, **kwargs)
 
 
