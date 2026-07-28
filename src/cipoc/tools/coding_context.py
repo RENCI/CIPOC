@@ -378,9 +378,10 @@ def reduce_valid_codes(
 ) -> tuple[dict[str, str] | None, list[ScopingReviewReason]]:
     """Intersect the data-dictionary code set with applicable code_table units.
 
-    Never empties: an empty intersection falls back to the unreduced set
-    (returned as None) and emits a review reason. With no full set available,
-    the union of the applicable tables stands in as the reduced set.
+    Exact matches use the scoped table's description. Never empties: an empty
+    intersection falls back to the unreduced set (returned as None) and emits a
+    review reason. With no full set available, the union of the applicable
+    tables stands in as the reduced set.
     """
     if not code_table_units:
         return None, []
@@ -397,7 +398,7 @@ def reduce_valid_codes(
     # base, so membership is checked on the behavior-stripped form as well.
     allowed_bases = {code.partition("/")[0] for code in allowed}
     reduced = {
-        code: description
+        code: allowed.get(code, description)
         for code, description in full_codes.items()
         if code in allowed or code.partition("/")[0] in allowed_bases
     }
