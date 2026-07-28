@@ -5,6 +5,7 @@ LLM calls; bounded model usage belongs in the scanner/extractor subagents.
 """
 import json
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, Iterable
@@ -110,6 +111,56 @@ def load_variable_groups(path: str | Path) -> list[TargetGroup]:
                     )
                 )
     return groups
+
+
+@dataclass(frozen=True)
+class GroupNode:
+    """One node of the variable-group config tree, in display order."""
+
+    group_id: str
+    name: str
+    parent_id: str | None
+    item_ids: tuple[int, ...]
+
+
+def load_group_hierarchy(path: str | Path) -> list[GroupNode]:
+    """Parse the variable-group config preserving its parent/subgroup nesting.
+
+    :func:`load_variable_groups` deliberately flattens subgroups into peer
+    ``TargetGroup`` plan entries, which is what the orchestrator needs but loses
+    the grouping a reader recognizes. This returns the same config as a
+    display-ordered tree instead: each top-level group followed by its subgroups.
+
+    A group carrying only subgroups still yields a node (with no ``item_ids``) so
+    it can be rendered as a header over its children.
+    """
+    with open(path, "r") as f:
+        config = json.load(f)
+
+    def _item_ids(node: dict) -> tuple[int, ...]:
+        return tuple(variable["item_id"] for variable in node.get("variables", []))
+
+    nodes: list[GroupNode] = []
+    for group in config.get("groups", []):
+        group_id = group.get("group_id")
+        nodes.append(
+            GroupNode(
+                group_id=group_id,
+                name=group.get("name") or group_id,
+                parent_id=None,
+                item_ids=_item_ids(group),
+            )
+        )
+        for subgroup in group.get("subgroups", []):
+            nodes.append(
+                GroupNode(
+                    group_id=subgroup.get("group_id"),
+                    name=subgroup.get("name") or subgroup.get("group_id"),
+                    parent_id=group_id,
+                    item_ids=_item_ids(subgroup),
+                )
+            )
+    return nodes
 
 
 def _parse_note_date(value: str | None) -> date | None:

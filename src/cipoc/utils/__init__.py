@@ -5,7 +5,7 @@ explicitly from ``cipoc.utils.databricks_utils`` when running in Databricks.
 """
 
 from .utils import CipocConfig, DocumentsConfig, DEFAULT_CONFIG_PATH, load_config
-from .progress_tracking import run_with_progress
+from .progress import run_with_progress
 
 
 __all__ = [

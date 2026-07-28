@@ -7,6 +7,8 @@ from .extraction import (
 )
 from .orchestration import (
     load_variable_groups,
+    load_group_hierarchy,
+    GroupNode,
     corpus_gate_passes,
     CORPUS_GATE_PREDICATES,
     note_matches_filter,
@@ -39,6 +41,8 @@ __all__ = [
     "lookup_variable_info",
     "build_variable_group",
     "load_variable_groups",
+    "load_group_hierarchy",
+    "GroupNode",
     "corpus_gate_passes",
     "CORPUS_GATE_PREDICATES",
     "note_matches_filter",

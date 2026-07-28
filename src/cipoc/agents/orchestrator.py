@@ -13,7 +13,7 @@ from langgraph.graph.message import add_messages
 from langchain.messages import AnyMessage, HumanMessage, SystemMessage
 
 from cipoc.llm import BaseAgentModel
-from cipoc.tools import build_corpus_descriptors, build_corpus_digests, VariableValueValidator, build_variable_group, load_rule_store, load_variable_groups, prefilter_notes, eligible_groups, pending_group, resolve_leftovers, derive_case_facts, not_found_results, to_case_results, build_report
+from cipoc.tools import build_corpus_descriptors, build_corpus_digests, VariableValueValidator, build_variable_group, load_group_hierarchy, load_rule_store, load_variable_groups, prefilter_notes, eligible_groups, pending_group, resolve_leftovers, derive_case_facts, not_found_results, to_case_results, build_report
 from cipoc.utils import CipocConfig, run_with_progress
 from cipoc.models import (
     Case,
@@ -167,9 +167,9 @@ class OrchestratorAgent(BaseAgent):
         self._scanner = NoteScannerAgent(config=self._config)
         self._retriever = NoteRetrieverAgent(config=self._config)
         self._extractor = ExtractorAgent(config=self._config)
-        self._target_variables = load_variable_groups(
-            self._config.documents().variable_groups_path
-        )
+        variable_groups_path = self._config.documents().variable_groups_path
+        self._target_variables = load_variable_groups(variable_groups_path)
+        self._target_group_hierarchy = load_group_hierarchy(variable_groups_path)
         # Config groups carry only item_id/name; the data dictionary and rule
         # store supply the valid codes, format, and case-scoped coding
         # instructions the extractor needs, filled in per dispatch (see
@@ -435,6 +435,7 @@ class OrchestratorAgent(BaseAgent):
             subgraphs=True,
             description="Orchestrator",
             target_groups=self._target_variables,
+            group_hierarchy=self._target_group_hierarchy,
         )
 
         return CaseState(**final_state).to_case()
