@@ -56,13 +56,3 @@ Identify every distinct cancer case mentioned in the note. For each mention, rep
 
 If no cancer is mentioned, return an empty list.
 """
-
-##### OLD #####
-# NOTE_SUMMARY_PROMPT = """\
-# Write a concise clinical summary of the note. Focus on any cancer-related findings: \
-# diagnoses, sites, staging, treatments, and disease status. Keep it factual and grounded \
-# only in the note's contents.
-
-# Output only the summary prose. Do not add any preamble, heading, labels, or statements \
-# about cancer presence or your confidence.
-# """
