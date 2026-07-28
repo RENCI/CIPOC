@@ -209,7 +209,8 @@ documents/       # NAACCR data dictionary, source manuals, compiled rules/
 extract_rules/   # site/histology/coding-rule JSONs and conversion helpers
 scripts/         # offline rule-compilation pipeline
 planning/        # design notes and MVP plans (planning/old/ = superseded reference)
-tests/fixtures/  # synthetic notes and note bundles for smoke checks
+tests/fixtures/     # synthetic notes and note bundles for smoke checks
+tests/test_outputs/ # saved outputs from agent demo (__main__) runs
 ```
 
 ## Data models
