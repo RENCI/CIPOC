@@ -15,9 +15,9 @@ from langgraph.graph.state import CompiledStateGraph
 from cipoc.tools import GroupNode
 
 from .events import normalize
-from .layout import build_rows, render_lines
+from .layout import build_rows
 from .model import ProgressModel, Snapshot, TaskKind
-from .renderers import AnsiAltScreen, NotebookDisplay, PlainLog, Renderer
+from .renderers import AnsiAltScreen, NotebookDisplay, PlainLog, Renderer, ansi_lines
 
 
 _MIN_TTY_HEIGHT = 12
@@ -83,6 +83,11 @@ class _RepaintLoop:
         self.error: Exception | None = None
         self.cleanup_interrupt: BaseException | None = None
         self._stop = threading.Event()
+        self._hold_final_frame = False
+        self._final_frame_ready = threading.Event()
+        self._release_final_frame = threading.Event()
+        self._final_frame_painted = False
+        self._write_summary = True
         self._pending: queue.Queue[Snapshot] | None = (
             queue.Queue() if isinstance(renderer, PlainLog) else None
         )
@@ -112,12 +117,41 @@ class _RepaintLoop:
     def is_alive(self) -> bool:
         return self._thread.is_alive()
 
-    def stop(self) -> BaseException | None:
+    def stop(self, *, hold_final_frame: bool = False) -> BaseException | None:
         """Request teardown without allowing blocked display I/O to block the graph."""
+        self._hold_final_frame = hold_final_frame
         self._stop.set()
         interrupted: BaseException | None = None
         if not self.started:
             return None
+        deadline = time.monotonic() + _REPAINT_JOIN_TIMEOUT
+        while self._thread.is_alive():
+            if hold_final_frame and self._final_frame_ready.is_set():
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            try:
+                self._thread.join(timeout=min(0.1, remaining))
+            except (KeyboardInterrupt, SystemExit) as error:
+                interrupted = interrupted or error
+        if hold_final_frame and not self.waiting_for_report:
+            self._release_final_frame.set()
+        return interrupted
+
+    @property
+    def waiting_for_report(self) -> bool:
+        return (
+            self._final_frame_ready.is_set()
+            and self._final_frame_painted
+            and self._thread.is_alive()
+        )
+
+    def release_final_frame(self, *, write_summary: bool = True) -> BaseException | None:
+        """Allow a held final frame to restore the terminal and finish teardown."""
+        self._write_summary = write_summary
+        self._release_final_frame.set()
+        interrupted: BaseException | None = None
         deadline = time.monotonic() + _REPAINT_JOIN_TIMEOUT
         while self._thread.is_alive():
             remaining = deadline - time.monotonic()
@@ -127,7 +161,7 @@ class _RepaintLoop:
                 self._thread.join(timeout=min(0.1, remaining))
             except (KeyboardInterrupt, SystemExit) as error:
                 interrupted = interrupted or error
-        return interrupted
+        return interrupted or self.cleanup_interrupt
 
     def _run(self) -> None:
         try:
@@ -153,7 +187,28 @@ class _RepaintLoop:
                 self.tick += 1
                 self._stop.wait(interval)
         finally:
-            interrupt = _finalize_renderer(self.renderer, self.snapshot, self.tick)
+            if self._hold_final_frame:
+                now = time.monotonic()
+                interrupt, painted = _paint_final_frame(
+                    self.renderer,
+                    self.snapshot,
+                    self.tick,
+                    report_prompt=True,
+                    now=now,
+                )
+                self.cleanup_interrupt = self.cleanup_interrupt or interrupt
+                self._final_frame_painted = painted
+                self._final_frame_ready.set()
+                if painted:
+                    self._release_final_frame.wait()
+                interrupt = _close_renderer(
+                    self.renderer,
+                    self.snapshot,
+                    now=now,
+                    write_summary=self._write_summary,
+                )
+            else:
+                interrupt = _finalize_renderer(self.renderer, self.snapshot, self.tick)
             self.cleanup_interrupt = self.cleanup_interrupt or interrupt
 
     def _run_plain_log(self) -> None:
@@ -183,25 +238,46 @@ def _write_persistent_summary(
 ) -> None:
     """Print the expanded final table after the alternate screen is restored."""
     width, _ = renderer.viewport()
-    lines = render_lines(build_rows(snapshot, width, None, now=now))
+    rows = build_rows(snapshot, width, None, now=now)
+    lines = ansi_lines(rows, color=renderer.color)
     renderer.stream.write("\n".join(lines) + "\n")
     renderer.stream.flush()
 
 
-def _finalize_renderer(
+def _paint_final_frame(
     renderer: Renderer,
     snapshot: Snapshot,
     tick: int,
-) -> BaseException | None:
-    """Force the final frame and close one renderer from its owning thread."""
-    interrupted: BaseException | None = None
-    now = time.monotonic()
+    *,
+    report_prompt: bool = False,
+    now: float | None = None,
+) -> tuple[BaseException | None, bool]:
+    """Paint one final frame, reporting interruptions without leaking teardown."""
+    now = time.monotonic() if now is None else now
     try:
-        renderer.paint(snapshot, now=now, tick=tick, final=True)
+        painted = renderer.paint(
+            snapshot,
+            now=now,
+            tick=tick,
+            final=True,
+            report_prompt=report_prompt,
+        )
+        return None, painted
     except (KeyboardInterrupt, SystemExit) as error:
-        interrupted = error
+        return error, False
     except Exception:
-        pass
+        return None, False
+
+
+def _close_renderer(
+    renderer: Renderer,
+    snapshot: Snapshot,
+    *,
+    now: float,
+    write_summary: bool = True,
+) -> BaseException | None:
+    """Close a renderer and optionally print its persistent expanded report."""
+    interrupted: BaseException | None = None
 
     # One signal may interrupt the restoration write itself. Retry enough to
     # restore the terminal while still bounding pathological renderer behavior.
@@ -214,7 +290,7 @@ def _finalize_renderer(
         except Exception:
             break
 
-    if isinstance(renderer, AnsiAltScreen):
+    if write_summary and isinstance(renderer, AnsiAltScreen):
         try:
             _write_persistent_summary(renderer, snapshot, now=now)
         except (KeyboardInterrupt, SystemExit) as error:
@@ -222,6 +298,18 @@ def _finalize_renderer(
         except Exception:
             pass
     return interrupted
+
+
+def _finalize_renderer(
+    renderer: Renderer,
+    snapshot: Snapshot,
+    tick: int,
+) -> BaseException | None:
+    """Force the final frame and close one renderer from its owning thread."""
+    now = time.monotonic()
+    interrupted, _ = _paint_final_frame(renderer, snapshot, tick, now=now)
+    close_interrupt = _close_renderer(renderer, snapshot, now=now)
+    return interrupted or close_interrupt
 
 
 def run_with_progress(
@@ -235,6 +323,7 @@ def run_with_progress(
     target_groups: Any = None,
     group_hierarchy: Iterable[GroupNode] | None = None,
     show_note_counts: bool = False,
+    pause_before_summary: bool = False,
 ) -> Any:
     """Run ``graph`` with live progress and return its last root state.
 
@@ -291,8 +380,14 @@ def run_with_progress(
         raise
     finally:
         cleanup_interrupt: BaseException | None = None
+        pause_interrupt: BaseException | None = None
+        hold_final_frame = (
+            pause_before_summary
+            and run_error is None
+            and isinstance(renderer, AnsiAltScreen)
+        )
         try:
-            cleanup_interrupt = painter.stop()
+            cleanup_interrupt = painter.stop(hold_final_frame=hold_final_frame)
         except (KeyboardInterrupt, SystemExit) as error:
             cleanup_interrupt = error
         except Exception:
@@ -303,10 +398,30 @@ def run_with_progress(
                 model.snapshot(),
                 painter.tick,
             )
+        elif hold_final_frame and painter.waiting_for_report:
+            try:
+                if cleanup_interrupt is None:
+                    input()
+            except EOFError:
+                pass
+            except (KeyboardInterrupt, SystemExit) as error:
+                pause_interrupt = error
+            finally:
+                try:
+                    cleanup_interrupt = cleanup_interrupt or painter.release_final_frame(
+                        write_summary=pause_interrupt is None
+                    )
+                except (KeyboardInterrupt, SystemExit) as error:
+                    cleanup_interrupt = cleanup_interrupt or error
+                except Exception:
+                    pass
         elif not painter.is_alive:
             cleanup_interrupt = cleanup_interrupt or painter.cleanup_interrupt
-        if run_error is None and cleanup_interrupt is not None:
-            raise cleanup_interrupt
+        if run_error is None:
+            if pause_interrupt is not None:
+                raise pause_interrupt
+            if cleanup_interrupt is not None:
+                raise cleanup_interrupt
 
 
 __all__ = ["run_with_progress"]

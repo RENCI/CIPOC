@@ -286,16 +286,16 @@ def _collapse(blocks: list[_Block], budget: int) -> set[str]:
     """Collapse whole groups until the body fits, cheapest information first.
 
     Fully-terminal clean groups go first, then terminal groups that still carry a
-    flag (their header keeps the tally), then groups that have not started. A
-    group with a live branch is never collapsed — that is the one the reader is
-    watching.
+    flag (their header keeps the tally), then groups that have not started, and
+    finally partially processed inactive groups. A group with a live branch is
+    never collapsed — that is the one the reader is watching.
     """
     collapsed: set[str] = set()
 
     def height() -> int:
         return sum(1 if block.group.group_id in collapsed else block.expanded_rows for block in blocks)
 
-    for tier in (1, 2, 3):
+    for tier in (1, 2, 3, 4):
         for block in blocks:
             if height() <= budget:
                 return collapsed
@@ -583,7 +583,13 @@ def _compact_rows(snapshot: Snapshot, cols: Columns, tick: int) -> list[Row]:
     return rows
 
 
-def _status_row(snapshot: Snapshot, cols: Columns, now: float) -> Row:
+def _status_row(
+    snapshot: Snapshot,
+    cols: Columns,
+    now: float,
+    *,
+    report_prompt: bool = False,
+) -> Row:
     if snapshot.fatal:
         return Row("status", (Cell(clip(f" ✖ {snapshot.fatal}", cols.total), "err"),))
     if snapshot.finished:
@@ -596,6 +602,9 @@ def _status_row(snapshot: Snapshot, cols: Columns, now: float) -> Row:
             )
         if snapshot.review_flags:
             summary += f" · {snapshot.review_flags} flagged for review"
+        if report_prompt:
+            prompt = " · Press Enter to view report"
+            summary = clip(summary, max(0, cols.total - len(prompt))) + prompt
         return Row("status", (Cell(clip(summary, cols.total), "ok"),))
     return Row("blank", (Cell("", ""),))
 
@@ -610,6 +619,7 @@ def build_rows(
     *,
     now: float | None = None,
     tick: int = 0,
+    report_prompt: bool = False,
 ) -> list[Row]:
     """Render one frame. ``height=None`` means unbounded — nothing is collapsed.
 
@@ -630,7 +640,7 @@ def build_rows(
             node_budget = max(0, height - len(rows) - 1)
             node_rows = node_rows[-node_budget:] if node_budget else []
         rows.extend(node_rows)
-        rows.append(_status_row(snapshot, cols, now))
+        rows.append(_status_row(snapshot, cols, now, report_prompt=report_prompt))
         return rows
 
     rows.extend(_column_titles(cols))
@@ -704,7 +714,7 @@ def build_rows(
     rows.extend(node_rows)
     if snapshot.branches:
         rows.extend(_footer(snapshot, cols, now))
-    rows.append(_status_row(snapshot, cols, now))
+    rows.append(_status_row(snapshot, cols, now, report_prompt=report_prompt))
     return rows
 
 

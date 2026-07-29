@@ -2,7 +2,7 @@ import io
 import os
 import threading
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from cipoc.agents.extractor import ExtractorAgent
 from cipoc.agents.note_retriever import NoteRetrieverAgent
@@ -319,20 +319,129 @@ class ProgressRunnerTests(unittest.TestCase):
         with patch(
             "cipoc.utils.progress.runner._select_renderer",
             return_value=renderer,
-        ):
+        ), patch("builtins.input", return_value="") as read_input:
             run_with_progress(
                 graph,
                 {},
                 description="Test",
                 target_groups=groups,
+                pause_before_summary=True,
             )
 
+        read_input.assert_called_once_with()
         output = stream.getvalue()
         self.assertIn("\x1b[?1049l", output)
         summary = output.rsplit("\x1b[?1049l", 1)[1]
         self.assertIn("Date of Diagnosis", summary)
         self.assertIn("202601", summary)
         self.assertNotIn("\x1b", summary)
+
+    def test_final_dashboard_stays_open_while_waiting_for_enter(self):
+        stream = _TTY()
+        renderer = AnsiAltScreen(
+            stream,
+            color=False,
+            size_provider=lambda: os.terminal_size((80, 24)),
+        )
+        graph = _Graph([("values", {"answer": 1})])
+
+        def press_enter():
+            waiting_output = stream.getvalue()
+            self.assertIn("Press Enter to view report", waiting_output)
+            self.assertIn("\x1b[?1049h", waiting_output)
+            self.assertNotIn("\x1b[?1049l", waiting_output)
+            return ""
+
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=renderer,
+        ), patch("builtins.input", side_effect=press_enter):
+            run_with_progress(graph, {}, pause_before_summary=True)
+
+        output = stream.getvalue()
+        exit_position = output.index("\x1b[?1049l")
+        self.assertLess(exit_position, output.rindex("CIPOC"))
+
+    def test_pause_is_skipped_for_non_tty_notebook_failure_and_default_runs(self):
+        renderers_and_graphs = (
+            (PlainLog(io.StringIO()), _Graph([("values", {"answer": 1})]), True),
+            (
+                NotebookDisplay(
+                    display_fn=lambda value, **kwargs: None,
+                    html_factory=lambda value: value,
+                ),
+                _Graph([("values", {"answer": 1})]),
+                True,
+            ),
+            (
+                AnsiAltScreen(
+                    _TTY(),
+                    color=False,
+                    size_provider=lambda: os.terminal_size((80, 24)),
+                ),
+                _Graph([], ValueError("failed")),
+                True,
+            ),
+            (
+                AnsiAltScreen(
+                    _TTY(),
+                    color=False,
+                    size_provider=lambda: os.terminal_size((80, 24)),
+                ),
+                _Graph([("values", {"answer": 1})]),
+                False,
+            ),
+        )
+        for renderer, graph, pause in renderers_and_graphs:
+            with self.subTest(renderer=type(renderer).__name__, pause=pause):
+                read_input = Mock()
+                with patch(
+                    "cipoc.utils.progress.runner._select_renderer",
+                    return_value=renderer,
+                ), patch("builtins.input", read_input):
+                    if graph.error is None:
+                        run_with_progress(graph, {}, pause_before_summary=pause)
+                    else:
+                        with self.assertRaisesRegex(ValueError, "failed"):
+                            run_with_progress(graph, {}, pause_before_summary=pause)
+                read_input.assert_not_called()
+
+    def test_eof_restores_terminal_and_prints_report(self):
+        stream = _TTY()
+        renderer = AnsiAltScreen(
+            stream,
+            color=False,
+            size_provider=lambda: os.terminal_size((80, 24)),
+        )
+        graph = _Graph([("values", {"answer": 1})])
+
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=renderer,
+        ), patch("builtins.input", side_effect=EOFError):
+            run_with_progress(graph, {}, pause_before_summary=True)
+
+        output = stream.getvalue()
+        self.assertIn("\x1b[?25h\x1b[?1049l", output)
+        self.assertIn("CIPOC", output.rsplit("\x1b[?1049l", 1)[1])
+
+    def test_pause_interruption_restores_terminal(self):
+        stream = _TTY()
+        renderer = AnsiAltScreen(
+            stream,
+            color=False,
+            size_provider=lambda: os.terminal_size((80, 24)),
+        )
+        graph = _Graph([("values", {"answer": 1})])
+
+        with patch(
+            "cipoc.utils.progress.runner._select_renderer",
+            return_value=renderer,
+        ), patch("builtins.input", side_effect=KeyboardInterrupt("cancelled")):
+            with self.assertRaisesRegex(KeyboardInterrupt, "cancelled"):
+                run_with_progress(graph, {}, pause_before_summary=True)
+
+        self.assertIn("\x1b[?25h\x1b[?1049l", stream.getvalue())
 
 
 class ProgressDisabledTests(unittest.TestCase):

@@ -180,6 +180,39 @@ class ProgressLayoutTests(unittest.TestCase):
         self.assertIn("1114", text)
         self.assertIn("validate·2", text)
 
+    def test_24_row_dashboard_keeps_all_top_level_groups_and_active_details(self):
+        rows = build_rows(self.snapshot, 100, 24, now=172.0)
+        text = "\n".join(render_lines(rows))
+
+        for group in self.snapshot.groups:
+            if group.depth == 0:
+                with self.subTest(group=group.name):
+                    self.assertIn(group.name, text)
+        self.assertIn("▾ Metastases", text)
+        self.assertIn("1114", text)
+        self.assertIn("validate·2", text)
+
+    def test_final_report_prompt_is_live_layout_only(self):
+        snapshot = replace(self.snapshot, finished=True, branches=())
+
+        live = "\n".join(
+            render_lines(
+                build_rows(
+                    snapshot,
+                    80,
+                    24,
+                    now=172.0,
+                    report_prompt=True,
+                )
+            )
+        )
+        persistent = "\n".join(
+            render_lines(build_rows(snapshot, 80, None, now=172.0))
+        )
+
+        self.assertIn("Press Enter to view report", live)
+        self.assertNotIn("Press Enter to view report", persistent)
+
     def test_standalone_extractor_combines_variable_table_and_node_timeline(self):
         graph_input = {
             "requested_variables": {

@@ -28,12 +28,12 @@ from .model import (
 
 _ANSI_STYLES: Mapping[str, str] = {
     "bold": "\033[1m",
-    "dim": "\033[2;90m",
+    "dim": "\033[38;5;250m",
     "accent": "\033[38;5;74m",
     "active": "\033[1;36m",
-    "ok": "\033[38;5;33m",
-    "warn": "\033[38;5;214m",
-    "err": "\033[38;5;208m",
+    "ok": "\033[38;5;114m",
+    "warn": "\033[38;5;208m",
+    "err": "\033[38;5;220m",
     "llm": "\033[38;5;186m",
 }
 
@@ -86,6 +86,7 @@ class Renderer(Protocol):
         now: float | None = None,
         tick: int = 0,
         final: bool = False,
+        report_prompt: bool = False,
     ) -> bool: ...
 
     def close(self) -> None: ...
@@ -111,8 +112,9 @@ class PlainLog:
         now: float | None = None,
         tick: int = 0,
         final: bool = False,
+        report_prompt: bool = False,
     ) -> bool:
-        del tick, final
+        del tick, final, report_prompt
         now = time.monotonic() if now is None else now
         lines = self._transitions(self._previous, snapshot, now)
         self._previous = snapshot
@@ -293,6 +295,7 @@ class AnsiAltScreen:
         now: float | None = None,
         tick: int = 0,
         final: bool = False,
+        report_prompt: bool = False,
     ) -> bool:
         now = time.monotonic() if now is None else now
         if not final and now - self._last_paint < self.min_interval:
@@ -301,7 +304,14 @@ class AnsiAltScreen:
         if self._closed:
             return False
         width, height = self.viewport()
-        rows = build_rows(snapshot, width, height, now=now, tick=tick)
+        rows = build_rows(
+            snapshot,
+            width,
+            height,
+            now=now,
+            tick=tick,
+            report_prompt=report_prompt,
+        )
         lines = [_ansi_row(row, color=self.color) for row in rows]
         frame = (
             _HOME
@@ -338,6 +348,11 @@ def _ansi_row(row: Row, *, color: bool) -> str:
     return "".join(parts)
 
 
+def ansi_lines(rows: list[Row], *, color: bool) -> list[str]:
+    """Render semantic rows as safe ANSI text, or plain text when disabled."""
+    return [_ansi_row(row, color=color) for row in rows]
+
+
 class NotebookDisplay:
     """Update one IPython HTML display handle at no more than two frames/second."""
 
@@ -369,7 +384,9 @@ class NotebookDisplay:
         now: float | None = None,
         tick: int = 0,
         final: bool = False,
+        report_prompt: bool = False,
     ) -> bool:
+        del report_prompt
         now = time.monotonic() if now is None else now
         if not final and now - self._last_paint < self.min_interval:
             return False
@@ -413,4 +430,4 @@ def _html_document(rows: list[Row]) -> str:
     )
 
 
-__all__ = ["AnsiAltScreen", "NotebookDisplay", "PlainLog", "Renderer"]
+__all__ = ["AnsiAltScreen", "NotebookDisplay", "PlainLog", "Renderer", "ansi_lines"]

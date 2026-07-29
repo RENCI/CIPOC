@@ -51,11 +51,13 @@ class VariableValueValidator:
                 f"Value exceeds the maximum length of {variable.length} characters."
             )
 
-        if isinstance(variable.valid_codes, dict) and variable.valid_codes:
+        # Date syntax takes precedence over scoped code tables. A malformed rule
+        # must not turn a format token such as "CCYYMMDD" into an allowable value.
+        if self._is_date_variable(variable):
+            errors.extend(self._validate_date(value))
+        elif isinstance(variable.valid_codes, dict) and variable.valid_codes:
             if not self._matches_valid_code(variable, value):
                 errors.append("Value is not one of the variable's allowable codes.")
-        elif self._is_date_variable(variable):
-            errors.extend(self._validate_date(value))
 
         return errors
 

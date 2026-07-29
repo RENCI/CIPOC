@@ -33,6 +33,7 @@ from cipoc.models import (
     ConceptWithEvidence,
 )
 from cipoc.models.case import TERMINAL_VARIABLE_STATUSES
+from .coding_context import resolve_gross_site, site_in_ranges
 
 
 def _concept_present(corpus: NoteCorpusDescriptors, concept: str) -> bool:
@@ -304,16 +305,22 @@ def site_applies(applies_to: SiteApplicability | None, facts: CaseFacts | None) 
     if applies_to is None:
         return True  # not site-limited
 
-    site = (facts.gross_primary_site or facts.primary_site) if facts else None
+    gross_site = facts.gross_primary_site if facts else None
+    primary_site = facts.primary_site if facts else None
     histology = facts.histology if facts else None
-    if not site and not histology:
+    if not gross_site and not primary_site and not histology:
         return True  # nothing known that could exclude it
 
-    if site and any(
-        s.casefold() in site.casefold() or site.casefold() in s.casefold()
+    if gross_site and any(
+        s.casefold() in gross_site.casefold() or gross_site.casefold() in s.casefold()
         for s in applies_to.gross_primary_sites
     ):
         return True
+    if primary_site:
+        for site in applies_to.gross_primary_sites:
+            ranges = resolve_gross_site(site)
+            if ranges is not None and site_in_ranges(primary_site, ranges):
+                return True
     if histology and histology in applies_to.histology_families:
         return True
     return False

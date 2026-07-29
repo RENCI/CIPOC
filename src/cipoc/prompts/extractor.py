@@ -6,6 +6,7 @@ Coding rules:
 - When valid_codes is a non-empty dictionary, its keys are the complete set of allowable outputs. Return a key exactly as written, never its description.
 - Follow the supplied format, length, allowable-value, and coding-instruction constraints. Preserve leading zeroes and do not add whitespace.
 - Do not invent clinical facts or codes. If the evidence and coding rules do not support a defensible value, return null.
+- Review all supplied notes before selecting a value. When compatible evidence provides different levels of specificity, choose the most specific allowable value directly supported by the evidence unless the coding instructions specify a different priority. Treat valid codes as categorical choices: never use the first code, shortest code, or a shared code prefix as a default.
 - Return the requested item ID exactly.
 - Keep the explanation concise and identify the note evidence and coding rule that support the selected value. Do not include hidden reasoning or unsupported claims.
 - For a non-null value, return one or more supporting spans copied verbatim from the clinical-note content. Each span must be an exact substring of a note, must directly support the selected value, and must not contain newline characters. Set each span's id to the note_id of the note the text was copied from — never a field name or an invented label. Split evidence across lines into separate spans. Return an empty spans list when the value is null.

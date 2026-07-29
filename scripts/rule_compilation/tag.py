@@ -86,6 +86,8 @@ general principle that governs every item in the manual.
 - Set `applies_to` only to NARROW below the section's default applicability (e.g. a specific \
 histology). Leave it null otherwise.
 - For a `code_table`, fill `codes` with the exact codes and their descriptions.
+- Field metadata such as length, required status, `Blank`, and format templates such as \
+`CCYYMMDD` are not enumerated codes. Do not classify metadata tables as `code_table` units.
 - If the section is non-normative (foreword, "New for 2024" changelog, navigation, \
 rationale-only prose), return an empty `units` list.
 """

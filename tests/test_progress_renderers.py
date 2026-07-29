@@ -3,7 +3,9 @@ import os
 import re
 import unittest
 from dataclasses import replace
+from unittest.mock import patch
 
+from cipoc.utils.progress.layout import build_rows
 from cipoc.utils.progress.model import (
     BranchSnapshot,
     GroupSnapshot,
@@ -11,7 +13,12 @@ from cipoc.utils.progress.model import (
     Stage,
     VariableSnapshot,
 )
-from cipoc.utils.progress.renderers import AnsiAltScreen, NotebookDisplay, PlainLog
+from cipoc.utils.progress.renderers import (
+    AnsiAltScreen,
+    NotebookDisplay,
+    PlainLog,
+    ansi_lines,
+)
 
 
 ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -130,6 +137,28 @@ class AnsiAltScreenTests(unittest.TestCase):
         self.assertIn("\x1b[1;36m", output)
         self.assertIn("validate·2", ANSI.sub("", output))
         self.assertEqual(output.count("\x1b[H"), 3)
+
+    def test_persistent_rows_use_semantic_colors(self):
+        _, _, terminal = snapshots()
+        rows = build_rows(terminal, 80, None, now=12.0)
+
+        output = "\n".join(ansi_lines(rows, color=True))
+
+        self.assertIn("\x1b[38;5;250m", output)
+        self.assertIn("\x1b[38;5;114m", output)
+        self.assertIn("\x1b[38;5;208m", output)
+        self.assertIn("202601", ANSI.sub("", output))
+
+    def test_no_color_disables_persistent_row_styles(self):
+        _, _, terminal = snapshots()
+        with patch.dict(os.environ, {"NO_COLOR": ""}):
+            renderer = AnsiAltScreen(io.StringIO())
+        rows = build_rows(terminal, 80, None, now=12.0)
+
+        output = "\n".join(ansi_lines(rows, color=renderer.color))
+
+        self.assertNotIn("\x1b", output)
+        self.assertIn("202601", output)
 
 
 class _Html:

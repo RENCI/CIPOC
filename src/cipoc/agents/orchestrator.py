@@ -441,6 +441,7 @@ class OrchestratorAgent(BaseAgent):
             description="Orchestrator",
             target_groups=self._target_variables,
             group_hierarchy=self._target_group_hierarchy,
+            pause_before_summary=True,
         )
 
         return CaseState(**final_state).to_case()
