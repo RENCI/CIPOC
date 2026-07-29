@@ -1,0 +1,1067 @@
+{
+  "format": "cytoscape-elements-v1",
+  "directed": true,
+  "metadata": {
+    "title": "CIPOC unified agent execution graph",
+    "description": "One connected execution graph integrating deterministic orchestration, note scanning, note retrieval, extraction, validation, and repair.",
+    "generated_by": "scripts/generate_agent_system_graph.py",
+    "entry_node": "case_start",
+    "exit_node": "case_end",
+    "agent_colors": {
+      "orchestrator": "#6d5bd0",
+      "scanner": "#008c7a",
+      "retriever": "#d16b22",
+      "extractor": "#1473e6"
+    },
+    "kind_colors": {
+      "endpoint": "#263248",
+      "deterministic": "#eef2f7",
+      "llm": "#fff1c7",
+      "decision": "#ffffff",
+      "fanout": "#e8e4ff",
+      "convergence": "#e8e4ff"
+    },
+    "multiplicity": {
+      "once": "Runs once at that point in the case flow",
+      "per_note": "Runs concurrently for each note",
+      "per_group": "Runs concurrently for each eligible variable group",
+      "per_variable": "Runs concurrently for each variable",
+      "per_variable_attempt": "May repeat within the bounded variable repair loop"
+    }
+  },
+  "elements": {
+    "nodes": [
+      {
+        "data": {
+          "id": "case_start",
+          "label": "START",
+          "agent": "orchestrator",
+          "kind": "endpoint",
+          "detail": "",
+          "multiplicity": "once",
+          "implementation": "virtual_endpoint"
+        }
+      },
+      {
+        "data": {
+          "id": "initialize_case",
+          "label": "Initialize case",
+          "agent": "orchestrator",
+          "kind": "deterministic",
+          "detail": "Seed targets, structured values, pending results, and case facts",
+          "multiplicity": "once",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "fan_out_notes",
+          "label": "Fan out notes",
+          "agent": "orchestrator",
+          "kind": "fanout",
+          "detail": "Send one scanner branch per clinical note",
+          "multiplicity": "once",
+          "implementation": "fanout_marker"
+        }
+      },
+      {
+        "data": {
+          "id": "scanner_initialize",
+          "label": "Initialize note scan",
+          "agent": "scanner",
+          "kind": "deterministic",
+          "detail": "",
+          "multiplicity": "per_note",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "scanner_summarize_note",
+          "label": "Summarize note",
+          "agent": "scanner",
+          "kind": "llm",
+          "detail": "",
+          "multiplicity": "per_note",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "scanner_detect_concepts",
+          "label": "Detect concepts",
+          "agent": "scanner",
+          "kind": "llm",
+          "detail": "",
+          "multiplicity": "per_note",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "scanner_cancer_gate",
+          "label": "Cancer evidence?",
+          "agent": "scanner",
+          "kind": "decision",
+          "detail": "",
+          "multiplicity": "per_note",
+          "implementation": "router"
+        }
+      },
+      {
+        "data": {
+          "id": "scanner_get_cancer_mentions",
+          "label": "Extract cancer mentions",
+          "agent": "scanner",
+          "kind": "llm",
+          "detail": "",
+          "multiplicity": "per_note",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "scanner_note_complete",
+          "label": "Note scan complete",
+          "agent": "scanner",
+          "kind": "convergence",
+          "detail": "Return one ProcessedClinicalNote",
+          "multiplicity": "per_note",
+          "implementation": "convergence_marker"
+        }
+      },
+      {
+        "data": {
+          "id": "characterize_corpus",
+          "label": "Characterize corpus",
+          "agent": "orchestrator",
+          "kind": "deterministic",
+          "detail": "Merge scans and build corpus descriptors and note digests",
+          "multiplicity": "once",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "check_state",
+          "label": "Outstanding work?",
+          "agent": "orchestrator",
+          "kind": "decision",
+          "detail": "",
+          "multiplicity": "once",
+          "implementation": "langgraph_node_and_router"
+        }
+      },
+      {
+        "data": {
+          "id": "plan_extraction",
+          "label": "Plan extraction",
+          "agent": "orchestrator",
+          "kind": "deterministic",
+          "detail": "Find eligible groups and scope their pending variables",
+          "multiplicity": "once",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "resolve_leftovers",
+          "label": "Resolve leftovers",
+          "agent": "orchestrator",
+          "kind": "deterministic",
+          "detail": "Mark gated or blocked pending variables terminal",
+          "multiplicity": "once",
+          "implementation": "expanded_operation"
+        }
+      },
+      {
+        "data": {
+          "id": "fan_out_groups",
+          "label": "Fan out eligible groups",
+          "agent": "orchestrator",
+          "kind": "fanout",
+          "detail": "",
+          "multiplicity": "once",
+          "implementation": "fanout_marker"
+        }
+      },
+      {
+        "data": {
+          "id": "hard_filter_notes",
+          "label": "Apply hard note filter",
+          "agent": "orchestrator",
+          "kind": "deterministic",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "expanded_operation"
+        }
+      },
+      {
+        "data": {
+          "id": "hard_filter_gate",
+          "label": "Any notes remain?",
+          "agent": "orchestrator",
+          "kind": "decision",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "expanded_operation"
+        }
+      },
+      {
+        "data": {
+          "id": "retriever_initialize",
+          "label": "Initialize retrieval",
+          "agent": "retriever",
+          "kind": "deterministic",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "retriever_identify_relevant_notes",
+          "label": "Identify relevant notes",
+          "agent": "retriever",
+          "kind": "llm",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "relevant_notes_gate",
+          "label": "Relevant notes selected?",
+          "agent": "orchestrator",
+          "kind": "decision",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "expanded_operation"
+        }
+      },
+      {
+        "data": {
+          "id": "record_not_found",
+          "label": "Record not found",
+          "agent": "orchestrator",
+          "kind": "deterministic",
+          "detail": "Skip extraction and create clean misses for the group",
+          "multiplicity": "per_group",
+          "implementation": "expanded_operation"
+        }
+      },
+      {
+        "data": {
+          "id": "extractor_initialize",
+          "label": "Initialize extractor",
+          "agent": "extractor",
+          "kind": "deterministic",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "extractor_load_notes",
+          "label": "Load selected notes",
+          "agent": "extractor",
+          "kind": "deterministic",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "extractor_mode_gate",
+          "label": "Extraction mode",
+          "agent": "extractor",
+          "kind": "decision",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "router"
+        }
+      },
+      {
+        "data": {
+          "id": "extractor_extract_group_values",
+          "label": "Extract group values",
+          "agent": "extractor",
+          "kind": "llm",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "fan_out_variables",
+          "label": "Fan out variables",
+          "agent": "extractor",
+          "kind": "fanout",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "fanout_marker"
+        }
+      },
+      {
+        "data": {
+          "id": "variable_entry_gate",
+          "label": "Candidate available?",
+          "agent": "extractor",
+          "kind": "decision",
+          "detail": "Group mode validates its shared candidate; individual mode extracts first",
+          "multiplicity": "per_variable",
+          "implementation": "router"
+        }
+      },
+      {
+        "data": {
+          "id": "extractor_extract_individual_value",
+          "label": "Extract individual value",
+          "agent": "extractor",
+          "kind": "llm",
+          "detail": "",
+          "multiplicity": "per_variable",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "extractor_validate_extraction",
+          "label": "Validate extraction",
+          "agent": "extractor",
+          "kind": "deterministic",
+          "detail": "",
+          "multiplicity": "per_variable",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "validation_gate",
+          "label": "Valid or attempts exhausted?",
+          "agent": "extractor",
+          "kind": "decision",
+          "detail": "",
+          "multiplicity": "per_variable",
+          "implementation": "router"
+        }
+      },
+      {
+        "data": {
+          "id": "extractor_repair_invalid_extraction",
+          "label": "Repair invalid extraction",
+          "agent": "extractor",
+          "kind": "llm",
+          "detail": "",
+          "multiplicity": "per_variable_attempt",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "extractor_complete_variable",
+          "label": "Complete variable",
+          "agent": "extractor",
+          "kind": "deterministic",
+          "detail": "",
+          "multiplicity": "per_variable",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "merge_variable_results",
+          "label": "Merge variable results",
+          "agent": "extractor",
+          "kind": "convergence",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "map_case_results",
+          "label": "Map case results",
+          "agent": "orchestrator",
+          "kind": "deterministic",
+          "detail": "Convert validated extractor output to per-item case results",
+          "multiplicity": "per_group",
+          "implementation": "expanded_operation"
+        }
+      },
+      {
+        "data": {
+          "id": "group_complete",
+          "label": "Group branch complete",
+          "agent": "orchestrator",
+          "kind": "convergence",
+          "detail": "",
+          "multiplicity": "per_group",
+          "implementation": "convergence_marker"
+        }
+      },
+      {
+        "data": {
+          "id": "merge_and_update",
+          "label": "Merge groups and update facts",
+          "agent": "orchestrator",
+          "kind": "deterministic",
+          "detail": "Join group branches and derive newly coded case facts",
+          "multiplicity": "once",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "finalize_case",
+          "label": "Finalize case",
+          "agent": "orchestrator",
+          "kind": "deterministic",
+          "detail": "Build the review report and durable Case",
+          "multiplicity": "once",
+          "implementation": "langgraph_node"
+        }
+      },
+      {
+        "data": {
+          "id": "case_end",
+          "label": "END",
+          "agent": "orchestrator",
+          "kind": "endpoint",
+          "detail": "",
+          "multiplicity": "once",
+          "implementation": "virtual_endpoint"
+        }
+      }
+    ],
+    "edges": [
+      {
+        "data": {
+          "id": "edge_01",
+          "source": "case_start",
+          "target": "initialize_case",
+          "label": "",
+          "agent": "orchestrator",
+          "kind": "flow",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_02",
+          "source": "initialize_case",
+          "target": "fan_out_notes",
+          "label": "",
+          "agent": "orchestrator",
+          "kind": "flow",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_03",
+          "source": "fan_out_notes",
+          "target": "scanner_initialize",
+          "label": "one branch per note",
+          "agent": "orchestrator",
+          "kind": "fanout",
+          "multiplicity": "per_note"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_04",
+          "source": "scanner_initialize",
+          "target": "scanner_summarize_note",
+          "label": "",
+          "agent": "scanner",
+          "kind": "flow",
+          "multiplicity": "per_note"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_05",
+          "source": "scanner_summarize_note",
+          "target": "scanner_detect_concepts",
+          "label": "",
+          "agent": "scanner",
+          "kind": "flow",
+          "multiplicity": "per_note"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_06",
+          "source": "scanner_detect_concepts",
+          "target": "scanner_cancer_gate",
+          "label": "",
+          "agent": "scanner",
+          "kind": "flow",
+          "multiplicity": "per_note"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_07",
+          "source": "scanner_cancer_gate",
+          "target": "scanner_get_cancer_mentions",
+          "label": "yes",
+          "agent": "scanner",
+          "kind": "conditional",
+          "multiplicity": "per_note"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_08",
+          "source": "scanner_cancer_gate",
+          "target": "scanner_note_complete",
+          "label": "no",
+          "agent": "scanner",
+          "kind": "conditional",
+          "multiplicity": "per_note"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_09",
+          "source": "scanner_get_cancer_mentions",
+          "target": "scanner_note_complete",
+          "label": "",
+          "agent": "scanner",
+          "kind": "flow",
+          "multiplicity": "per_note"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_10",
+          "source": "scanner_note_complete",
+          "target": "characterize_corpus",
+          "label": "join all note branches",
+          "agent": "orchestrator",
+          "kind": "convergence",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_11",
+          "source": "characterize_corpus",
+          "target": "check_state",
+          "label": "",
+          "agent": "orchestrator",
+          "kind": "flow",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_12",
+          "source": "check_state",
+          "target": "plan_extraction",
+          "label": "work remains and no fatal blocker",
+          "agent": "orchestrator",
+          "kind": "conditional",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_13",
+          "source": "plan_extraction",
+          "target": "fan_out_groups",
+          "label": "eligible groups",
+          "agent": "orchestrator",
+          "kind": "conditional",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_14",
+          "source": "plan_extraction",
+          "target": "resolve_leftovers",
+          "label": "none eligible",
+          "agent": "orchestrator",
+          "kind": "conditional",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_15",
+          "source": "resolve_leftovers",
+          "target": "check_state",
+          "label": "recheck terminal state",
+          "agent": "orchestrator",
+          "kind": "loop",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_16",
+          "source": "fan_out_groups",
+          "target": "hard_filter_notes",
+          "label": "one branch per group",
+          "agent": "orchestrator",
+          "kind": "fanout",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_17",
+          "source": "hard_filter_notes",
+          "target": "hard_filter_gate",
+          "label": "",
+          "agent": "orchestrator",
+          "kind": "flow",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_18",
+          "source": "hard_filter_gate",
+          "target": "record_not_found",
+          "label": "no",
+          "agent": "orchestrator",
+          "kind": "conditional",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_19",
+          "source": "hard_filter_gate",
+          "target": "retriever_initialize",
+          "label": "yes",
+          "agent": "retriever",
+          "kind": "conditional",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_20",
+          "source": "retriever_initialize",
+          "target": "retriever_identify_relevant_notes",
+          "label": "",
+          "agent": "retriever",
+          "kind": "flow",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_21",
+          "source": "retriever_identify_relevant_notes",
+          "target": "relevant_notes_gate",
+          "label": "",
+          "agent": "retriever",
+          "kind": "flow",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_22",
+          "source": "relevant_notes_gate",
+          "target": "record_not_found",
+          "label": "no",
+          "agent": "orchestrator",
+          "kind": "conditional",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_23",
+          "source": "relevant_notes_gate",
+          "target": "extractor_initialize",
+          "label": "yes",
+          "agent": "extractor",
+          "kind": "conditional",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_24",
+          "source": "extractor_initialize",
+          "target": "extractor_load_notes",
+          "label": "",
+          "agent": "extractor",
+          "kind": "flow",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_25",
+          "source": "extractor_load_notes",
+          "target": "extractor_mode_gate",
+          "label": "",
+          "agent": "extractor",
+          "kind": "flow",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_26",
+          "source": "extractor_mode_gate",
+          "target": "extractor_extract_group_values",
+          "label": "group",
+          "agent": "extractor",
+          "kind": "conditional",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_27",
+          "source": "extractor_mode_gate",
+          "target": "fan_out_variables",
+          "label": "individual",
+          "agent": "extractor",
+          "kind": "conditional",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_28",
+          "source": "extractor_extract_group_values",
+          "target": "fan_out_variables",
+          "label": "shared candidates",
+          "agent": "extractor",
+          "kind": "flow",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_29",
+          "source": "fan_out_variables",
+          "target": "variable_entry_gate",
+          "label": "one branch per variable",
+          "agent": "extractor",
+          "kind": "fanout",
+          "multiplicity": "per_variable"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_30",
+          "source": "variable_entry_gate",
+          "target": "extractor_extract_individual_value",
+          "label": "individual mode",
+          "agent": "extractor",
+          "kind": "conditional",
+          "multiplicity": "per_variable"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_31",
+          "source": "variable_entry_gate",
+          "target": "extractor_validate_extraction",
+          "label": "group candidate",
+          "agent": "extractor",
+          "kind": "conditional",
+          "multiplicity": "per_variable"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_32",
+          "source": "extractor_extract_individual_value",
+          "target": "extractor_validate_extraction",
+          "label": "",
+          "agent": "extractor",
+          "kind": "flow",
+          "multiplicity": "per_variable"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_33",
+          "source": "extractor_validate_extraction",
+          "target": "validation_gate",
+          "label": "",
+          "agent": "extractor",
+          "kind": "flow",
+          "multiplicity": "per_variable"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_34",
+          "source": "validation_gate",
+          "target": "extractor_repair_invalid_extraction",
+          "label": "invalid and attempts remain",
+          "agent": "extractor",
+          "kind": "conditional",
+          "multiplicity": "per_variable"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_35",
+          "source": "extractor_repair_invalid_extraction",
+          "target": "extractor_validate_extraction",
+          "label": "retry (max 3 attempts)",
+          "agent": "extractor",
+          "kind": "loop",
+          "multiplicity": "per_variable_attempt"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_36",
+          "source": "validation_gate",
+          "target": "extractor_complete_variable",
+          "label": "valid or attempts exhausted",
+          "agent": "extractor",
+          "kind": "conditional",
+          "multiplicity": "per_variable"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_37",
+          "source": "extractor_complete_variable",
+          "target": "merge_variable_results",
+          "label": "join all variable branches",
+          "agent": "extractor",
+          "kind": "convergence",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_38",
+          "source": "merge_variable_results",
+          "target": "map_case_results",
+          "label": "",
+          "agent": "orchestrator",
+          "kind": "flow",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_39",
+          "source": "map_case_results",
+          "target": "group_complete",
+          "label": "",
+          "agent": "orchestrator",
+          "kind": "flow",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_40",
+          "source": "record_not_found",
+          "target": "group_complete",
+          "label": "",
+          "agent": "orchestrator",
+          "kind": "flow",
+          "multiplicity": "per_group"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_41",
+          "source": "group_complete",
+          "target": "merge_and_update",
+          "label": "join all group branches",
+          "agent": "orchestrator",
+          "kind": "convergence",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_42",
+          "source": "merge_and_update",
+          "target": "check_state",
+          "label": "plan next pass",
+          "agent": "orchestrator",
+          "kind": "loop",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_43",
+          "source": "check_state",
+          "target": "finalize_case",
+          "label": "nothing outstanding or fatal blocker",
+          "agent": "orchestrator",
+          "kind": "conditional",
+          "multiplicity": "once"
+        }
+      },
+      {
+        "data": {
+          "id": "edge_44",
+          "source": "finalize_case",
+          "target": "case_end",
+          "label": "",
+          "agent": "orchestrator",
+          "kind": "flow",
+          "multiplicity": "once"
+        }
+      }
+    ]
+  },
+  "style": [
+    {
+      "selector": "node",
+      "style": {
+        "label": "data(label)",
+        "background-color": "#eef2f7",
+        "border-width": 3,
+        "border-color": "#6d5bd0",
+        "color": "#172033",
+        "font-size": 13,
+        "text-wrap": "wrap",
+        "text-max-width": 150,
+        "text-valign": "center",
+        "text-halign": "center",
+        "width": 170,
+        "height": 58,
+        "shape": "roundrectangle"
+      }
+    },
+    {
+      "selector": "edge",
+      "style": {
+        "label": "data(label)",
+        "width": 2.5,
+        "line-color": "#6d5bd0",
+        "target-arrow-color": "#6d5bd0",
+        "target-arrow-shape": "triangle",
+        "curve-style": "bezier",
+        "font-size": 10,
+        "text-rotation": "autorotate",
+        "text-background-color": "#ffffff",
+        "text-background-opacity": 0.9,
+        "text-background-padding": 2
+      }
+    },
+    {
+      "selector": "node[kind = \"endpoint\"]",
+      "style": {
+        "background-color": "#263248",
+        "color": "#ffffff",
+        "shape": "ellipse"
+      }
+    },
+    {
+      "selector": "node[kind = \"llm\"]",
+      "style": {
+        "background-color": "#fff1c7"
+      }
+    },
+    {
+      "selector": "node[kind = \"decision\"]",
+      "style": {
+        "background-color": "#ffffff",
+        "shape": "diamond",
+        "width": 145,
+        "height": 80
+      }
+    },
+    {
+      "selector": "node[kind = \"fanout\"], node[kind = \"convergence\"]",
+      "style": {
+        "background-color": "#e8e4ff",
+        "shape": "hexagon"
+      }
+    },
+    {
+      "selector": "edge[kind = \"conditional\"]",
+      "style": {
+        "line-style": "dashed"
+      }
+    },
+    {
+      "selector": "edge[kind = \"loop\"]",
+      "style": {
+        "line-style": "dotted",
+        "curve-style": "unbundled-bezier"
+      }
+    },
+    {
+      "selector": "node[agent = \"orchestrator\"]",
+      "style": {
+        "border-color": "#6d5bd0"
+      }
+    },
+    {
+      "selector": "edge[agent = \"orchestrator\"]",
+      "style": {
+        "line-color": "#6d5bd0",
+        "target-arrow-color": "#6d5bd0"
+      }
+    },
+    {
+      "selector": "node[agent = \"scanner\"]",
+      "style": {
+        "border-color": "#008c7a"
+      }
+    },
+    {
+      "selector": "edge[agent = \"scanner\"]",
+      "style": {
+        "line-color": "#008c7a",
+        "target-arrow-color": "#008c7a"
+      }
+    },
+    {
+      "selector": "node[agent = \"retriever\"]",
+      "style": {
+        "border-color": "#d16b22"
+      }
+    },
+    {
+      "selector": "edge[agent = \"retriever\"]",
+      "style": {
+        "line-color": "#d16b22",
+        "target-arrow-color": "#d16b22"
+      }
+    },
+    {
+      "selector": "node[agent = \"extractor\"]",
+      "style": {
+        "border-color": "#1473e6"
+      }
+    },
+    {
+      "selector": "edge[agent = \"extractor\"]",
+      "style": {
+        "line-color": "#1473e6",
+        "target-arrow-color": "#1473e6"
+      }
+    }
+  ],
+  "layout": {
+    "name": "breadthfirst",
+    "directed": true,
+    "circle": false,
+    "spacingFactor": 1.15,
+    "roots": "#case_start"
+  }
+}
