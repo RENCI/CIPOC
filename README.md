@@ -212,7 +212,10 @@ src/cipoc/
     └── databricks_utils.py
 
 config/          # config.yaml + variable_groups.json
-documents/       # NAACCR data dictionary, source manuals, compiled rules/
+documents/
+├── manuals/     # NAACCR data dictionary + source manuals (gitignored, not in a clone)
+├── markdown/    # markdown-converted manuals the rule compilers read
+└── rules/       # compiled rule store (manifest.json + per-manual units)
 extract_rules/   # site/histology/coding-rule JSONs and conversion helpers
 scripts/         # offline rule-compilation pipeline
 planning/        # design notes and MVP plans (planning/old/ = superseded reference)
