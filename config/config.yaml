@@ -49,6 +49,6 @@ agents:
 
 documents:
   documents_path: documents/
-  data_dictionary_path: documents/naaccr_data_dictionary_v25.json
+  data_dictionary_path: documents/manuals/naaccr_data_dictionary_v25.json
   rules_path: documents/rules/
   variable_groups_path: config/variable_groups.json
