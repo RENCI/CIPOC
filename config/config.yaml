@@ -1,0 +1,54 @@
+# CIPOC configuration
+#
+# `llm` defines the default LLM settings applied to every agent.
+# `agents` holds optional per-agent overrides; any field set under an agent
+# is merged on top of the defaults in `llm`. Omit an agent (or leave it empty)
+# to have it use the defaults as-is.
+
+# Default LLM configuration (see cipoc.llm.OpenAIConfig).
+llm:
+  # model: gpt-5.5
+  model: gpt-oss-120b
+  provider: openai          # "openai" or "anthropic"
+
+  # Credentials / endpoint. Prefer environment variables over hardcoding
+  # secrets here; ${VAR} placeholders are expanded at load time.
+  base_url: ${AZURE_OPENAI_URL}
+  api_key: ${RENCI_AZURE_API_KEY}
+
+  # Endpoint-wide concurrency cap. Bounds in-flight requests via a semaphore on
+  # the shared model wrapper. This is a property of the endpoint, not the agent:
+  # to make it a global cap, build one model from these defaults and inject it
+  # into every subagent (llm=). Omit or set null for unbounded.
+  max_concurrency: 8
+
+  # Reasoning settings (OpenAI-style). Set to null to disable.
+  reasoning:
+    effort: medium          # "low", "medium", or "high"
+    summary: auto           # "detailed", "auto", or null
+
+  # Retry settings for the LLM-backed graph nodes (langgraph RetryPolicy; see
+  # cipoc.llm.llm_retry_policy). Only transient endpoint failures are retried —
+  # HTTP 429/408/409/5xx and connection errors. Backing off 1s, 2, 4, 8, 16, 32,
+  # 60 over 8 attempts rides out roughly two minutes of throttling.
+  retry:
+    max_attempts: 8
+    initial_interval: 1.0
+    backoff_factor: 2.0
+    max_interval: 60.0
+    jitter: true
+
+# Optional per-agent overrides. Keys are agent names from the `agents` module.
+# Only specify the fields you want to change; everything else falls back to `llm`.
+agents:
+  extractor: {}
+    # Example override:
+    # model: gpt-5.5
+    # reasoning:
+    #   effort: high
+
+documents:
+  documents_path: documents/
+  data_dictionary_path: documents/manuals/naaccr_data_dictionary_v25.json
+  rules_path: documents/rules/
+  variable_groups_path: config/variable_groups.json

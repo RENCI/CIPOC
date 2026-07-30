@@ -1,0 +1,1028 @@
+{
+  "format": "cipoc-agent-flowcharts-v2",
+  "metadata": {
+    "title": "CIPOC compact workflow diagrams",
+    "description": "Three conceptual flowcharts covering overall orchestration, note scanning, and the combined retrieval/extraction pipeline.",
+    "generated_by": "scripts/generate_agent_flowcharts.py",
+    "agent_colors": {
+      "orchestrator": "#6d5bd0",
+      "scanner": "#008c7a",
+      "retriever": "#d16b22",
+      "extractor": "#1473e6"
+    },
+    "kind_colors": {
+      "endpoint": "#263248",
+      "deterministic": "#eef2f7",
+      "llm": "#fff1c7",
+      "decision": "#ffffff",
+      "fanout": "#e8e4ff",
+      "convergence": "#e8e4ff"
+    }
+  },
+  "style": [
+    {
+      "selector": "node",
+      "style": {
+        "label": "data(label)",
+        "background-color": "#eef2f7",
+        "border-width": 3,
+        "border-color": "#6d5bd0",
+        "color": "#172033",
+        "font-size": 11,
+        "text-wrap": "wrap",
+        "text-max-width": 130,
+        "text-valign": "center",
+        "text-halign": "center",
+        "width": 145,
+        "height": 48,
+        "shape": "roundrectangle"
+      }
+    },
+    {
+      "selector": "edge",
+      "style": {
+        "label": "data(label)",
+        "width": 2.5,
+        "line-color": "#6d5bd0",
+        "target-arrow-color": "#6d5bd0",
+        "target-arrow-shape": "triangle",
+        "curve-style": "bezier",
+        "font-size": 9,
+        "text-rotation": "autorotate",
+        "text-background-color": "#ffffff",
+        "text-background-opacity": 0.92,
+        "text-background-padding": 2
+      }
+    },
+    {
+      "selector": "node[kind = \"endpoint\"]",
+      "style": {
+        "background-color": "#263248",
+        "color": "#ffffff",
+        "shape": "ellipse",
+        "width": 78,
+        "height": 34
+      }
+    },
+    {
+      "selector": "node[kind = \"llm\"]",
+      "style": {
+        "background-color": "#fff1c7"
+      }
+    },
+    {
+      "selector": "node[kind = \"decision\"]",
+      "style": {
+        "background-color": "#ffffff",
+        "shape": "diamond",
+        "width": 125,
+        "height": 70
+      }
+    },
+    {
+      "selector": "node[kind = \"fanout\"], node[kind = \"convergence\"]",
+      "style": {
+        "background-color": "#e8e4ff",
+        "shape": "hexagon"
+      }
+    },
+    {
+      "selector": "node[kind = \"subagent\"]",
+      "style": {
+        "shape": "roundrectangle",
+        "width": 190,
+        "height": 62,
+        "color": "#ffffff",
+        "font-size": 13,
+        "font-weight": 700,
+        "border-width": 0
+      }
+    },
+    {
+      "selector": "edge[kind = \"conditional\"]",
+      "style": {
+        "line-style": "dashed"
+      }
+    },
+    {
+      "selector": "edge[kind = \"loop\"]",
+      "style": {
+        "line-style": "dotted",
+        "curve-style": "unbundled-bezier"
+      }
+    },
+    {
+      "selector": "edge[kind = \"fanout\"]",
+      "style": {
+        "line-style": "dashed",
+        "curve-style": "unbundled-bezier",
+        "control-point-weights": 0.5
+      }
+    },
+    {
+      "selector": "edge[fanout_lane = \"left\"]",
+      "style": {
+        "control-point-distances": -18
+      }
+    },
+    {
+      "selector": "edge[fanout_lane = \"center\"]",
+      "style": {
+        "control-point-distances": 0
+      }
+    },
+    {
+      "selector": "edge[fanout_lane = \"right\"]",
+      "style": {
+        "control-point-distances": 18
+      }
+    },
+    {
+      "selector": "node[agent = \"orchestrator\"]",
+      "style": {
+        "border-color": "#6d5bd0"
+      }
+    },
+    {
+      "selector": "node[kind = \"subagent\"][agent = \"orchestrator\"]",
+      "style": {
+        "background-color": "#6d5bd0"
+      }
+    },
+    {
+      "selector": "edge[agent = \"orchestrator\"]",
+      "style": {
+        "line-color": "#6d5bd0",
+        "target-arrow-color": "#6d5bd0"
+      }
+    },
+    {
+      "selector": "node[agent = \"scanner\"]",
+      "style": {
+        "border-color": "#008c7a"
+      }
+    },
+    {
+      "selector": "node[kind = \"subagent\"][agent = \"scanner\"]",
+      "style": {
+        "background-color": "#008c7a"
+      }
+    },
+    {
+      "selector": "edge[agent = \"scanner\"]",
+      "style": {
+        "line-color": "#008c7a",
+        "target-arrow-color": "#008c7a"
+      }
+    },
+    {
+      "selector": "node[agent = \"retriever\"]",
+      "style": {
+        "border-color": "#d16b22"
+      }
+    },
+    {
+      "selector": "node[kind = \"subagent\"][agent = \"retriever\"]",
+      "style": {
+        "background-color": "#d16b22"
+      }
+    },
+    {
+      "selector": "edge[agent = \"retriever\"]",
+      "style": {
+        "line-color": "#d16b22",
+        "target-arrow-color": "#d16b22"
+      }
+    },
+    {
+      "selector": "node[agent = \"extractor\"]",
+      "style": {
+        "border-color": "#1473e6"
+      }
+    },
+    {
+      "selector": "node[kind = \"subagent\"][agent = \"extractor\"]",
+      "style": {
+        "background-color": "#1473e6"
+      }
+    },
+    {
+      "selector": "edge[agent = \"extractor\"]",
+      "style": {
+        "line-color": "#1473e6",
+        "target-arrow-color": "#1473e6"
+      }
+    }
+  ],
+  "charts": [
+    {
+      "id": "overview",
+      "title": "Overall Workflow",
+      "description": "Major orchestration phases and decisions; implementation-level nodes are omitted.",
+      "metadata": {
+        "entry_node": "case_start",
+        "exit_node": "case_end"
+      },
+      "elements": {
+        "nodes": [
+          {
+            "data": {
+              "id": "case_start",
+              "label": "START",
+              "agent": "orchestrator",
+              "kind": "endpoint",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "initialize_case",
+              "label": "Initialize case",
+              "agent": "orchestrator",
+              "kind": "deterministic",
+              "detail": "Load notes, requested variables, structured values, and known facts",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "scanner_agent_block",
+              "label": "Note Scanner Agent",
+              "agent": "scanner",
+              "kind": "subagent",
+              "detail": "Scan and summarize each clinical note",
+              "multiplicity": "per_note",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "characterize_corpus",
+              "label": "Characterize corpus",
+              "agent": "orchestrator",
+              "kind": "deterministic",
+              "detail": "Combine note scans into case-level evidence and note digests",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "eligible_groups_gate",
+              "label": "Eligible groups remain?",
+              "agent": "orchestrator",
+              "kind": "decision",
+              "detail": "Apply corpus gates, site rules, and variable dependencies",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "retriever_agent_block",
+              "label": "Note Retriever Agent",
+              "agent": "retriever",
+              "kind": "subagent",
+              "detail": "Select the notes relevant to each eligible variable group",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "relevant_notes_gate",
+              "label": "Relevant notes?",
+              "agent": "orchestrator",
+              "kind": "decision",
+              "detail": "Skip extraction when no useful notes survive selection",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "extractor_agent_block",
+              "label": "Extractor Agent",
+              "agent": "extractor",
+              "kind": "subagent",
+              "detail": "Extract, validate, and repair values for the group",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "update_case",
+              "label": "Update case results and facts",
+              "agent": "orchestrator",
+              "kind": "deterministic",
+              "detail": "Record extracted values or clean not-found results, then update facts",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "finalize_case",
+              "label": "Finalize case",
+              "agent": "orchestrator",
+              "kind": "deterministic",
+              "detail": "Build the durable case and review report",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "case_end",
+              "label": "END",
+              "agent": "orchestrator",
+              "kind": "endpoint",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "data": {
+              "source": "case_start",
+              "target": "initialize_case",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_01"
+            }
+          },
+          {
+            "data": {
+              "source": "initialize_case",
+              "target": "scanner_agent_block",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "fanout",
+              "multiplicity": "per_note",
+              "fanout_lane": "left",
+              "id": "edge_02"
+            }
+          },
+          {
+            "data": {
+              "source": "initialize_case",
+              "target": "scanner_agent_block",
+              "label": "one branch per note",
+              "agent": "orchestrator",
+              "kind": "fanout",
+              "multiplicity": "per_note",
+              "fanout_lane": "center",
+              "id": "edge_03"
+            }
+          },
+          {
+            "data": {
+              "source": "initialize_case",
+              "target": "scanner_agent_block",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "fanout",
+              "multiplicity": "per_note",
+              "fanout_lane": "right",
+              "id": "edge_04"
+            }
+          },
+          {
+            "data": {
+              "source": "scanner_agent_block",
+              "target": "characterize_corpus",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_05"
+            }
+          },
+          {
+            "data": {
+              "source": "characterize_corpus",
+              "target": "eligible_groups_gate",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_06"
+            }
+          },
+          {
+            "data": {
+              "source": "eligible_groups_gate",
+              "target": "retriever_agent_block",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "fanout",
+              "multiplicity": "per_group",
+              "fanout_lane": "left",
+              "id": "edge_07"
+            }
+          },
+          {
+            "data": {
+              "source": "eligible_groups_gate",
+              "target": "retriever_agent_block",
+              "label": "yes, one branch per group",
+              "agent": "orchestrator",
+              "kind": "fanout",
+              "multiplicity": "per_group",
+              "fanout_lane": "center",
+              "id": "edge_08"
+            }
+          },
+          {
+            "data": {
+              "source": "eligible_groups_gate",
+              "target": "retriever_agent_block",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "fanout",
+              "multiplicity": "per_group",
+              "fanout_lane": "right",
+              "id": "edge_09"
+            }
+          },
+          {
+            "data": {
+              "source": "eligible_groups_gate",
+              "target": "finalize_case",
+              "label": "no",
+              "agent": "orchestrator",
+              "kind": "conditional",
+              "multiplicity": "once",
+              "id": "edge_10"
+            }
+          },
+          {
+            "data": {
+              "source": "retriever_agent_block",
+              "target": "relevant_notes_gate",
+              "label": "",
+              "agent": "retriever",
+              "kind": "flow",
+              "multiplicity": "per_group",
+              "id": "edge_11"
+            }
+          },
+          {
+            "data": {
+              "source": "relevant_notes_gate",
+              "target": "extractor_agent_block",
+              "label": "yes",
+              "agent": "extractor",
+              "kind": "conditional",
+              "multiplicity": "per_group",
+              "id": "edge_12"
+            }
+          },
+          {
+            "data": {
+              "source": "relevant_notes_gate",
+              "target": "update_case",
+              "label": "no: not found",
+              "agent": "orchestrator",
+              "kind": "conditional",
+              "multiplicity": "per_group",
+              "id": "edge_13"
+            }
+          },
+          {
+            "data": {
+              "source": "extractor_agent_block",
+              "target": "update_case",
+              "label": "",
+              "agent": "extractor",
+              "kind": "flow",
+              "multiplicity": "per_group",
+              "id": "edge_14"
+            }
+          },
+          {
+            "data": {
+              "source": "update_case",
+              "target": "eligible_groups_gate",
+              "label": "plan next pass",
+              "agent": "orchestrator",
+              "kind": "loop",
+              "multiplicity": "once",
+              "id": "edge_15"
+            }
+          },
+          {
+            "data": {
+              "source": "finalize_case",
+              "target": "case_end",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_16"
+            }
+          }
+        ]
+      },
+      "layout": {
+        "name": "breadthfirst",
+        "directed": true,
+        "circle": false,
+        "spacingFactor": 0.95,
+        "roots": "#case_start"
+      }
+    },
+    {
+      "id": "scanner",
+      "title": "Note Scanning",
+      "description": "One streamlined pass over each clinical note.",
+      "metadata": {
+        "entry_node": "scanner_start",
+        "exit_node": "scanner_end"
+      },
+      "elements": {
+        "nodes": [
+          {
+            "data": {
+              "id": "scanner_start",
+              "label": "START",
+              "agent": "scanner",
+              "kind": "endpoint",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "scanner_summarize_note",
+              "label": "Summarize note",
+              "agent": "scanner",
+              "kind": "llm",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "scanner_detect_concepts",
+              "label": "Detect clinical concepts",
+              "agent": "scanner",
+              "kind": "llm",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "scanner_cancer_gate",
+              "label": "Cancer evidence?",
+              "agent": "scanner",
+              "kind": "decision",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "scanner_get_cancer_mentions",
+              "label": "Extract cancer mentions",
+              "agent": "scanner",
+              "kind": "llm",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "scanner_note_complete",
+              "label": "Return processed note",
+              "agent": "scanner",
+              "kind": "deterministic",
+              "detail": "Return the summary, concepts, temporality, and evidence",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "scanner_end",
+              "label": "END",
+              "agent": "scanner",
+              "kind": "endpoint",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "data": {
+              "source": "scanner_start",
+              "target": "scanner_summarize_note",
+              "label": "",
+              "agent": "scanner",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_01"
+            }
+          },
+          {
+            "data": {
+              "source": "scanner_summarize_note",
+              "target": "scanner_detect_concepts",
+              "label": "",
+              "agent": "scanner",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_02"
+            }
+          },
+          {
+            "data": {
+              "source": "scanner_detect_concepts",
+              "target": "scanner_cancer_gate",
+              "label": "",
+              "agent": "scanner",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_03"
+            }
+          },
+          {
+            "data": {
+              "source": "scanner_cancer_gate",
+              "target": "scanner_get_cancer_mentions",
+              "label": "yes",
+              "agent": "scanner",
+              "kind": "conditional",
+              "multiplicity": "once",
+              "id": "edge_04"
+            }
+          },
+          {
+            "data": {
+              "source": "scanner_cancer_gate",
+              "target": "scanner_note_complete",
+              "label": "no",
+              "agent": "scanner",
+              "kind": "conditional",
+              "multiplicity": "once",
+              "id": "edge_05"
+            }
+          },
+          {
+            "data": {
+              "source": "scanner_get_cancer_mentions",
+              "target": "scanner_note_complete",
+              "label": "",
+              "agent": "scanner",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_06"
+            }
+          },
+          {
+            "data": {
+              "source": "scanner_note_complete",
+              "target": "scanner_end",
+              "label": "",
+              "agent": "scanner",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_07"
+            }
+          }
+        ]
+      },
+      "layout": {
+        "name": "breadthfirst",
+        "directed": true,
+        "circle": false,
+        "spacingFactor": 0.95,
+        "roots": "#scanner_start"
+      }
+    },
+    {
+      "id": "retrieval_extraction",
+      "title": "Note Retrieval and Extraction",
+      "description": "Candidate-note selection, value extraction, validation, and bounded repair.",
+      "metadata": {
+        "entry_node": "pipeline_start",
+        "exit_node": "pipeline_end"
+      },
+      "elements": {
+        "nodes": [
+          {
+            "data": {
+              "id": "pipeline_start",
+              "label": "START",
+              "agent": "orchestrator",
+              "kind": "endpoint",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "filter_notes",
+              "label": "Apply note filters",
+              "agent": "orchestrator",
+              "kind": "deterministic",
+              "detail": "Apply deterministic date, type, and concept filters",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "candidate_notes_gate",
+              "label": "Candidate notes?",
+              "agent": "orchestrator",
+              "kind": "decision",
+              "detail": "",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "retriever_pipeline_block",
+              "label": "Note Retriever Agent",
+              "agent": "retriever",
+              "kind": "subagent",
+              "detail": "Rank the candidate notes for the requested variable group",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "selected_notes_gate",
+              "label": "Relevant notes selected?",
+              "agent": "orchestrator",
+              "kind": "decision",
+              "detail": "",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "extractor_pipeline_block",
+              "label": "Extractor Agent",
+              "agent": "extractor",
+              "kind": "subagent",
+              "detail": "Extract candidate values using scoped coding guidance",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "validate_values",
+              "label": "Validate values",
+              "agent": "extractor",
+              "kind": "deterministic",
+              "detail": "Check values against allowed NAACCR codes",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "values_valid_gate",
+              "label": "Valid or attempts exhausted?",
+              "agent": "extractor",
+              "kind": "decision",
+              "detail": "",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "repair_values",
+              "label": "Repair invalid values",
+              "agent": "extractor",
+              "kind": "llm",
+              "detail": "",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "not_found",
+              "label": "Return not found",
+              "agent": "orchestrator",
+              "kind": "deterministic",
+              "detail": "Create clean misses without running extraction",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "return_results",
+              "label": "Return group results",
+              "agent": "extractor",
+              "kind": "deterministic",
+              "detail": "",
+              "multiplicity": "per_group",
+              "implementation": "conceptual_stage"
+            }
+          },
+          {
+            "data": {
+              "id": "pipeline_end",
+              "label": "END",
+              "agent": "orchestrator",
+              "kind": "endpoint",
+              "detail": "",
+              "multiplicity": "once",
+              "implementation": "conceptual_stage"
+            }
+          }
+        ],
+        "edges": [
+          {
+            "data": {
+              "source": "pipeline_start",
+              "target": "filter_notes",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_01"
+            }
+          },
+          {
+            "data": {
+              "source": "filter_notes",
+              "target": "candidate_notes_gate",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_02"
+            }
+          },
+          {
+            "data": {
+              "source": "candidate_notes_gate",
+              "target": "retriever_pipeline_block",
+              "label": "yes",
+              "agent": "retriever",
+              "kind": "conditional",
+              "multiplicity": "once",
+              "id": "edge_03"
+            }
+          },
+          {
+            "data": {
+              "source": "candidate_notes_gate",
+              "target": "not_found",
+              "label": "no",
+              "agent": "orchestrator",
+              "kind": "conditional",
+              "multiplicity": "once",
+              "id": "edge_04"
+            }
+          },
+          {
+            "data": {
+              "source": "retriever_pipeline_block",
+              "target": "selected_notes_gate",
+              "label": "",
+              "agent": "retriever",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_05"
+            }
+          },
+          {
+            "data": {
+              "source": "selected_notes_gate",
+              "target": "extractor_pipeline_block",
+              "label": "yes",
+              "agent": "extractor",
+              "kind": "conditional",
+              "multiplicity": "once",
+              "id": "edge_06"
+            }
+          },
+          {
+            "data": {
+              "source": "selected_notes_gate",
+              "target": "not_found",
+              "label": "no",
+              "agent": "orchestrator",
+              "kind": "conditional",
+              "multiplicity": "once",
+              "id": "edge_07"
+            }
+          },
+          {
+            "data": {
+              "source": "extractor_pipeline_block",
+              "target": "validate_values",
+              "label": "",
+              "agent": "extractor",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_08"
+            }
+          },
+          {
+            "data": {
+              "source": "validate_values",
+              "target": "values_valid_gate",
+              "label": "",
+              "agent": "extractor",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_09"
+            }
+          },
+          {
+            "data": {
+              "source": "values_valid_gate",
+              "target": "return_results",
+              "label": "yes",
+              "agent": "extractor",
+              "kind": "conditional",
+              "multiplicity": "once",
+              "id": "edge_10"
+            }
+          },
+          {
+            "data": {
+              "source": "values_valid_gate",
+              "target": "repair_values",
+              "label": "no",
+              "agent": "extractor",
+              "kind": "conditional",
+              "multiplicity": "once",
+              "id": "edge_11"
+            }
+          },
+          {
+            "data": {
+              "source": "repair_values",
+              "target": "validate_values",
+              "label": "retry",
+              "agent": "extractor",
+              "kind": "loop",
+              "multiplicity": "once",
+              "id": "edge_12"
+            }
+          },
+          {
+            "data": {
+              "source": "not_found",
+              "target": "pipeline_end",
+              "label": "",
+              "agent": "orchestrator",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_13"
+            }
+          },
+          {
+            "data": {
+              "source": "return_results",
+              "target": "pipeline_end",
+              "label": "",
+              "agent": "extractor",
+              "kind": "flow",
+              "multiplicity": "once",
+              "id": "edge_14"
+            }
+          }
+        ]
+      },
+      "layout": {
+        "name": "breadthfirst",
+        "directed": true,
+        "circle": false,
+        "spacingFactor": 0.95,
+        "roots": "#pipeline_start"
+      }
+    }
+  ]
+}
