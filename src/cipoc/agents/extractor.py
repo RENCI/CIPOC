@@ -400,7 +400,7 @@ class ExtractorAgent(BaseAgent):
 
 if __name__ == "__main__":
     agent = ExtractorAgent()
-    agent.draw(path="src/cipoc/agents/visualization/extractor.png")
+    # agent.draw(path="src/cipoc/agents/visualization/extractor.png")
 
     # Case facts matching tests/fixtures/note_bundle.json (left breast, dx 2025);
     # scopes coding instructions and valid codes from documents/rules. The gross
@@ -422,3 +422,8 @@ if __name__ == "__main__":
 
     result = agent.run(ExtractorInput(requested_variables=variable_group, notes=notes))
     # print(json.dumps(result.model_dump(), indent=2))
+
+    output_path = Path(__file__).resolve().parents[3] / "tests" / "test_outputs" / "extractor_test.json"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w") as f:
+        json.dump(result.model_dump(), f, indent=2, default=str)

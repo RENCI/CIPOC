@@ -473,7 +473,7 @@ if __name__ == "__main__":
         structured_data = {int(k): str(v) for k, v in json.loads(text).items()}
 
     agent = OrchestratorAgent()
-    agent.draw(path="src/cipoc/agents/visualization/orchestrator.png")
+    # agent.draw(path="src/cipoc/agents/visualization/orchestrator.png")
 
     note_path = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "note_bundle.json"
     with open(note_path, "r") as f:

@@ -1,3 +1,6 @@
+import json
+import logging
+
 from typing_extensions import Annotated
 from pydantic import BaseModel, Field
 
@@ -11,9 +14,11 @@ from cipoc.models import (
     ProcessedClinicalNote,
     CancerMention,
     CancerStatus,
+    ConfidenceLevel,
     ConceptWithEvidence,
     CONCEPT_DESCRIPTIONS,
-    build_concept_presence_dict,
+    TextSpan,
+    confidence_field,
 )
 from cipoc.utils import CipocConfig, run_with_progress
 from cipoc.prompts.note_scanner import (
@@ -26,9 +31,7 @@ from cipoc.prompts.note_scanner import (
 from .base import BaseAgent
 
 
-# Rendered once: the concept vocabulary the detection call must judge, with descriptions.
-_CONCEPT_LIST = "\n".join(f"- {name}: {desc}" for name, desc in CONCEPT_DESCRIPTIONS.items())
-_CONCEPT_DETECTION_PROMPT = CONCEPT_DETECTION_PROMPT.format(concept_list=_CONCEPT_LIST)
+logger = logging.getLogger(__name__)
 
 
 # Graph state
@@ -39,6 +42,11 @@ class ScannerInput(BaseModel):
 class ConceptFinding(ConceptWithEvidence):
     """One detected concept: presence/confidence/evidence plus which concept it is."""
     concept: str = Field(description="Concept key, exactly as given in the list of concepts to evaluate.")
+    presence: bool = Field(description="Whether the concept is present in the note.")
+    confidence: ConfidenceLevel = confidence_field()
+    evidence: list[TextSpan] = Field(
+        description="Verbatim supporting spans; empty when the concept is absent."
+    )
 
 
 class ConceptFindingList(BaseModel):
@@ -86,27 +94,50 @@ class NoteScannerAgent(BaseAgent):
 
     def detect_concepts(self, state: ScannerState) -> dict:
         """Single LLM call detecting presence/evidence for every tracked concept."""
-        response = self.agent.structured(
-            ConceptFindingList, state.messages + [HumanMessage(_CONCEPT_DETECTION_PROMPT)]
+        concepts_to_evaluate = self._concepts_to_findings()
+        prompt = CONCEPT_DETECTION_PROMPT.format(
+            concept_list=json.dumps(concepts_to_evaluate, indent=2, ensure_ascii=False)
         )
-        return {"concepts": self._findings_to_concepts(response.findings)}
+        response = self.agent.structured(
+            ConceptFindingList, state.messages + [HumanMessage(prompt)]
+        )
+
+        expected = set(CONCEPT_DESCRIPTIONS)
+        returned = [finding.concept for finding in response.findings]
+        if len(returned) != len(expected) or set(returned) != expected:
+            logger.warning(
+                "Concept detection for note %s returned an incomplete concept set: %s",
+                state.note.note_id,
+                returned,
+            )
+
+        # Keep one finding per known concept. If duplicates disagree, presence
+        # wins so a malformed response cannot hide a positive finding.
+        findings_by_concept: dict[str, ConceptFinding] = {}
+        for finding in response.findings:
+            if finding.concept not in expected:
+                continue
+            current = findings_by_concept.get(finding.concept)
+            if current is None or (finding.presence and not current.presence):
+                findings_by_concept[finding.concept] = finding
+
+        concepts: dict[str, ConceptWithEvidence] = {}
+        for name in CONCEPT_DESCRIPTIONS:
+            finding = findings_by_concept.get(name)
+            concepts[name] = ConceptWithEvidence(
+                presence=finding.presence if finding else name == "cancer",
+                confidence=finding.confidence if finding else ConfidenceLevel.LOW,
+                evidence=finding.evidence if finding else [],
+            )
+        return {"concepts": concepts}
 
     @staticmethod
-    def _findings_to_concepts(findings: list[ConceptFinding]) -> dict[str, ConceptWithEvidence]:
-        """Fold detected findings into the full concept dict.
-
-        Starts from the default all-absent dict so every tracked concept is always
-        present as a key; unknown concept names returned by the model are ignored.
-        """
-        concepts = build_concept_presence_dict(with_evidence=True)
-        for finding in findings:
-            if finding.concept in concepts:
-                concepts[finding.concept] = ConceptWithEvidence(
-                    presence=finding.presence,
-                    confidence=finding.confidence,
-                    evidence=finding.evidence,
-                )
-        return concepts
+    def _concepts_to_findings() -> list[dict[str, str]]:
+        """Build the complete concept template supplied to the detection call."""
+        return [
+            {"concept": name, "description": description}
+            for name, description in CONCEPT_DESCRIPTIONS.items()
+        ]
 
     def summarize_note(self, state: ScannerState) -> dict:
         """Summarize a clinical note and tag it with search keywords."""
@@ -172,7 +203,6 @@ class NoteScannerAgent(BaseAgent):
 
 
 if __name__ == "__main__":
-    import json
     from pathlib import Path
 
     # Synthetic clinical note used to exercise the scanner end-to-end.
@@ -181,12 +211,15 @@ if __name__ == "__main__":
         note_data = json.load(f)
 
     agent = NoteScannerAgent()
-    agent.draw(path="src/cipoc/agents/visualization/note_scanner.png")
+    # agent.draw(path="src/cipoc/agents/visualization/note_scanner.png")
     if isinstance(note_data, dict):
         note_data = [note_data]
 
-    result = [agent.run(note).model_dump() for note in note_data]
+    result = agent.run(note_data[2]).model_dump()
+    # result = [agent.run(note).model_dump() for note in note_data]
     output_path = Path(__file__).resolve().parents[3] / "tests" / "test_outputs" / "scanner_test.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
         json.dump(result, f, indent=2)
+    
+    print(json.dumps(result, indent=2))
