@@ -22,6 +22,21 @@ _ENTRY_FIELD_MAP = {
       "Code Descriptions": "valid_codes",
   }
 
+
+def _normalize_code_descriptions(codes):
+    """Convert row-oriented code tables to the validator's code dictionary."""
+    if not isinstance(codes, list):
+        return codes
+
+    normalized: dict[str, str] = {}
+    for row in codes:
+        if "code" not in row or "description" not in row:
+            raise ValueError(
+                "Code-description rows must contain code and description fields."
+            )
+        normalized[str(row["code"])] = str(row["description"])
+    return normalized
+
 class VariableValueValidator:
     """Deterministically validate an extracted value against variable metadata."""
 
@@ -55,14 +70,14 @@ class VariableValueValidator:
         # must not turn a format token such as "CCYYMMDD" into an allowable value.
         if self._is_date_variable(variable):
             errors.extend(self._validate_date(value))
-        elif isinstance(variable.valid_codes, dict) and variable.valid_codes:
+        elif isinstance(variable.valid_codes, (dict, list)) and variable.valid_codes:
             if not self._matches_valid_code(variable, value):
                 errors.append("Value is not one of the variable's allowable codes.")
 
         return errors
 
     def _matches_valid_code(self, variable: VariableInfo, value: str) -> bool:
-        valid_codes = variable.valid_codes
+        valid_codes = _normalize_code_descriptions(variable.valid_codes)
         if not isinstance(valid_codes, dict):
             return False
         return value in valid_codes
