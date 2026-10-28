@@ -1,200 +1,125 @@
 # CIPOC
 
-This repository contains code for the Cancer Identification and Precision
-Oncology Center (CIPOC) at the University of North Carolina at Chapel Hill.
-CIPOC extracts [NAACCR](https://www.naaccr.org/) (North American Association of
-Central Cancer Registries) variables from free-text clinical notes using
-LLM-backed agents coordinated by a deterministic orchestrator. It scans notes for
-cancer evidence, selects the relevant notes for each requested variable, extracts
-structured coded values against the NAACCR data dictionary, and rolls the results
-up into an auditable, review-flagged case snapshot.
+Code for the Cancer Identification and Precision Oncology Center (CIPOC) at the
+University of North Carolina at Chapel Hill. CIPOC extracts
+[NAACCR](https://www.naaccr.org/) cancer-registry variables from free-text
+clinical notes.
 
-The design keeps LLM usage bounded to per-note/per-variable subagents while all
-control flow, gating, filtering, and roll-up remain deterministic — so provenance,
-confidence, and review reasons are preserved end to end.
+A deterministic [LangGraph](https://langchain-ai.github.io/langgraph/)
+orchestrator drives three LLM agents: one scans each note, one picks the notes
+relevant to a group of variables, and one codes those variables against the
+NAACCR data dictionary. Everything else (gating, filtering, merging results) is
+plain code, so every value keeps its provenance, confidence, and review flags.
 
-> **Deployment target:** an airgapped Databricks Runtime 18.2 ML (CPU)
-> environment. Dependencies are pinned to DBR 18.2–compatible versions. Do not
-> introduce dependencies outside that set.
+> **Target runtime:** an airgapped Databricks Runtime 18.2 ML (CPU) cluster.
+> Dependencies are pinned to what DBR 18.2 ships. Don't add new ones.
 
-Development takes place in the airgapped UNC Health SHIRE environment, so this
-repository may lag the internal code while changes are manually synchronized.
-LLM workloads currently run in Azure Databricks; some Databricks-specific
-components may remain while the project moves toward system-agnostic tooling.
+Development happens in the airgapped UNC Health SHIRE environment, so this
+repository can lag the internal copy. LLM calls currently go to Azure Databricks
+endpoints.
 
 ## How it works
 
-The `OrchestratorAgent` compiles a [LangGraph](https://langchain-ai.github.io/langgraph/)
-state graph that drives the full extraction for one patient case:
+`OrchestratorAgent` runs one patient case through this graph:
 
-```
-raw notes
-   │
-   ▼
-initialize ──► scan_notes ──► characterize_corpus ──► check_state ──┐
-   (seed         (NoteScanner    (corpus descriptors      (loop hub) │
-    plan &        per note,       + per-note digests)                │
-    results)      fan-out)                                           │
-                                                                     ▼
-                                          ┌──────────────── plan_extraction
-                                          │                  (fan out each
-                                          │                   eligible group)
-                                          ▼
-                              extract_branch (per group):
-                                retrieve_notes ──► extract
-                                (hard NoteFilter +   (ExtractorAgent
-                                 NoteRetriever        codes values,
-                                 soft filter)         validates)
-                                          │
-                                          ▼
-                                   merge_and_update ──► check_state
-                                   (fold coded values
-                                    into case facts)
-                                          │
-                              (no work left / fatal blocker)
-                                          ▼
-                                    finalize_case ──► Case snapshot
+```text
+initialize → scan_notes → note_branch ×notes → characterize_corpus → check_state ◄────┐
+                                                                          │           │
+                                             ┌─ work left ────────────────┤           │
+                                             ▼                            ▼           │
+                                      plan_extraction               finalize_case     │
+                                             │                     (nothing left)     │
+                                             ▼                                        │
+                                  extract_branch ×groups                              │
+                                 retrieve_notes → extract                             │
+                                             │                                        │
+                                             ▼                                        │
+                                     merge_and_update ────────────────────────────────┘
 ```
 
-- **Scan** — `NoteScannerAgent` processes each `ClinicalNote` into a
-  `ProcessedClinicalNote`: concept presence/evidence, cancer temporality status,
-  a summary, and search keywords.
-- **Characterize** — corpus-level descriptors and per-note digests are built
-  deterministically from the processed notes.
-- **Plan** — deterministic gating (`CorpusGate` predicates), site applicability,
-  and variable dependencies decide which variable groups are eligible on each
-  pass. Structured-data values supplied by the caller skip extraction entirely.
-- **Retrieve** — for each group, a deterministic hard `NoteFilter` narrows the
-  corpus, then `NoteRetrieverAgent` soft-filters the surviving note digests by
-  relevance to the group's variables.
-- **Extract** — `ExtractorAgent` codes the group's variables from the retrieved
-  notes, validating each value against the data dictionary (with a repair loop
-  for invalid extractions). An informative coded primary site takes precedence
-  over gross-site inference when selecting scoped code descriptions.
-- **Loop & finalize** — newly coded scoping facts feed the next planning pass;
-  when nothing remains eligible (or a fatal blocker is hit), the graph finalizes
-  a `Case` with per-variable results and a review report. The public run result
-  wraps that durable clinical snapshot with inputs, corpus, and observability.
+- **Scan:** `NoteScannerAgent` reads each note for concept evidence, cancer
+  temporality, a summary, and search keywords.
+- **Characterize:** builds corpus descriptors and a short digest of each note.
+- **Plan:** gates, site applicability, and stage order decide which variable
+  groups can run on this pass. Values the caller already knows skip extraction.
+- **Retrieve:** a fixed `NoteFilter` narrows the notes, then
+  `NoteRetrieverAgent` picks the relevant ones from their digests.
+- **Extract:** `ExtractorAgent` codes the group's variables and validates each
+  value against the data dictionary, retrying invalid answers.
+- **Loop and finalize:** newly coded facts, such as primary site, feed the next
+  planning pass. When nothing is left, `finalize_case` builds the `Case` with
+  per-variable results and a review report.
 
-## Installation
+Only the three agents call the LLM. The orchestrator's own nodes and everything
+in `src/cipoc/tools/` are deterministic.
 
-The project uses [`uv`](https://docs.astral.sh/uv/) with a pinned `uv.lock`:
+### Site scoping
+
+A coded primary site selects site-specific allowed codes from the site data
+dictionary. When no primary-site code is available, a gross site inferred from
+the notes is used instead.
+
+Validation checks values against the supplied code lists. It doesn't enforce
+every site- or year-specific coding rule, and the reference data has known gaps:
+item 400 is missing some cutaneous sites, and item 671's ranges aren't a complete
+procedure codebook. Review those cases before relying on them.
+
+## Setup
 
 ```bash
 uv sync
 ```
 
-Requires Python ≥ 3.11 (see `.python-version`). Source lives under `src/`, so run
-commands with `PYTHONPATH=src` unless the package is installed into the
-environment.
+Requires Python 3.11 or later. Code lives under `src/`, so the commands below set
+`PYTHONPATH=src`.
 
-### Workbench
+### Configuration
 
-The review workbench is a separate package and does not install CIPOC's runtime
-dependencies. Install it with standard `pip`:
+`config/config.yaml` is loaded by `cipoc.utils.load_config()`, which fills
+`${VAR}` placeholders from the environment.
 
-```bash
-python -m pip install ./packages/cipoc-workbench
-```
+- `llm`: defaults for every agent, including model, `base_url`, `api_key`,
+  `max_concurrency`, reasoning effort, and `retry`.
+- `agents`: per-agent overrides (`note_scanner`, `note_retriever`, `extractor`,
+  `orchestrator`), merged over `llm`.
+- `documents`: paths to the NAACCR data dictionary, the site data dictionary,
+  and the variable groups.
 
-Start empty, then choose a canonical `OrchestratorRunResult` JSON artifact with
-**Load Run...** at `http://127.0.0.1:8000/`:
-
-```bash
-cipoc-workbench serve --feedback-dir reviews
-```
-
-Or auto-load an explicit startup artifact, optionally with ground truth:
-
-```bash
-cipoc-workbench serve \
-    --state tests/test_outputs/case_state.json \
-    --ground-truth ground_truth.json \
-    --feedback-dir reviews
-```
-
-`cipoc-workbench serve` without arguments starts empty with read-only annotations.
-`--state` is optional; `--ground-truth` and legacy `--feedback FILE` require it.
-The bundled `1.0` compatibility example is unchanged and only loaded by explicit
-choice: select `packages/cipoc-workbench/src/cipoc_workbench/example/case_state.json`
-with **Load Run...** or pass that path to `--state`.
-
-**Load Run...** opens completed artifacts in tab-local memory, never uploading
-or persisting their contents. Refresh returns to empty without `--state`, or
-reloads the explicitly configured startup artifact. Switching
-clears ground truth and case-specific UI state, asks before discarding feedback
-drafts, and blocks switching during saves. Automatic ground truth uses a run-scoped
-API bound to the server's original startup UUID, with no unbound fallback.
-`--feedback-dir` saves one feedback document per run UUID even without `--state`;
-legacy `--feedback FILE` is mutually exclusive and startup-run-only. Local loading
-never establishes a server-global active run or binds the unscoped APIs. Without
-a startup artifact, legacy feedback is read-only with an unknown run ID and
-automatic ground truth cannot bind.
-Without a destination, annotations are read-only. Feedback may contain PHI; use a
-trusted interface and a single server process.
-
-The **Observability** view shows recorded usage, collection health, validation
-attempts, timing coverage, and optional cost estimates. Pricing requires an exact
-recorded model-name match in the local `endpoint_catalog.json` or **Load Pricing...**
-catalog; no prices are supplied by default and uncertain zero counts are not
-priced. See the [Workbench README](packages/cipoc-workbench/README.md) for the
-catalog format, feedback APIs, and coverage limits. These metrics do not establish
-actual endpoint headroom or quota saturation.
-
-## Configuration
-
-Runtime config is loaded from `config/config.yaml` via
-`cipoc.utils.load_config()`. `${VAR}` placeholders are expanded from the
-environment at load time.
-
-- `llm:` — default LLM settings applied to every agent (model, provider,
-  `base_url`, `api_key`, `max_concurrency`, reasoning effort, `retry`).
-- `agents:` — optional per-agent overrides (e.g. `extractor`, `note_scanner`,
-  `note_retriever`, `orchestrator`), merged on top of the `llm` defaults.
-- `documents:` — paths to the NAACCR and tissue-keyed data dictionaries and the
-  variable-group definitions.
-
-Only the OpenAI-compatible provider is active (targeting Databricks/Azure
-OpenAI-compatible endpoints). Set credentials via environment variables rather
-than hardcoding them:
+Only the OpenAI-compatible provider is active. Set the endpoint and key in the
+environment:
 
 ```bash
 export AZURE_OPENAI_URL=...
-export AZURE_OPENAI_API_KEY=...
+export RENCI_AZURE_API_KEY=...
 ```
 
-The variables to extract are defined in `config/variable_groups.json` as ordered
-groups with gating conditions, note filters, and NAACCR item IDs.
+`config/variable_groups.json` defines what to extract: ordered groups of NAACCR
+item IDs, each with gates, note filters, and a stage. `dependent` groups wait
+until every `initial` group has finished, even ones that found nothing.
 
-Endpoints must be explicit, nonblank HTTP(S) URLs. Configuration fingerprints
-record only allowlisted model settings, not credentials, headers, arbitrary
-extras, or raw endpoint URLs.
+`llm.max_concurrency` caps simultaneous calls to one model at one endpoint,
+across the whole process. The separate `run(max_concurrency=...)` setting limits
+LangGraph's parallel tasks. It must be unset or at least 2, because 1 deadlocks
+the pinned LangGraph 1.0.3.
 
-`llm.max_concurrency` is a process-wide synchronous budget per model at an
-endpoint. Live CIPOC wrappers using the same normalized endpoint and configured
-model name share a budget and must agree on capacity, including `None` for
-unbounded operation. Different models at the same URL have independent budgets
-and may use different limits; there is no aggregate URL-wide cap. Constructor
-model overrides determine the budget, not provider-reported model versions.
-Async methods, direct SDK access, and separate processes do not share this guarantee.
-The independent `run(max_concurrency=...)` graph setting must be at least 2 or
-unset: concurrency 1 deadlocks nested synchronous streaming in pinned LangGraph
-1.0.3 and is rejected before execution. Per-model LLM capacity 1 remains supported.
+> **Reference data isn't in the repo.** `documents/` is gitignored, so a fresh
+> clone has neither the NAACCR data dictionary
+> (`documents/manuals/naaccr_data_dictionary_v25.json`) nor the site data
+> dictionary (`documents/cipoc_data_dictionary.json`). Copy them in before running.
 
 ## Usage
 
-### Run the full orchestrator
+### Run a case
 
 ```bash
-# End-to-end run over the shared note bundle fixture
+# End-to-end run over tests/fixtures/note_bundle.json
 PYTHONPATH=src python -m cipoc.agents.orchestrator
 
-# Optionally seed already-known coded values (skip their extraction)
-PYTHONPATH=src python -m cipoc.agents.orchestrator \
-    --structured-data '{"400": "C509"}'
+# Seed values you already know, keyed by NAACCR item ID; they skip extraction
+PYTHONPATH=src python -m cipoc.agents.orchestrator --structured-data '{"400": "C509"}'
 ```
 
-Programmatically:
+From Python:
 
 ```python
 from cipoc.agents import OrchestratorAgent
@@ -202,275 +127,139 @@ from cipoc.models import OrchestratorRunError
 
 agent = OrchestratorAgent()
 try:
-    result = agent.run(raw_notes)  # raw_notes: list[dict], each a ClinicalNote
+    result = agent.run(raw_notes)  # list of dicts, each a ClinicalNote
 except OrchestratorRunError as error:
     failure = error.failure        # partial inputs, corpus, and observability
     raise
 
-case = result.case                 # durable clinical output
-print(case.model_dump())
+case = result.case
 ```
 
-`run()` returns an `OrchestratorRunResult` only after the graph completes and the
-clinical `Case` is finalized. A graph failure raises `OrchestratorRunError`; its
-`failure` attribute is an `OrchestratorRunFailure` with the partial diagnostic
-artifact and no `case` field.
+`run()` rejects an empty note list and duplicate note IDs (`1` and `"1"` count as
+the same note). If the graph fails, `error.failure` holds the partial
+diagnostics but no `case`.
 
-Input validation rejects empty note lists (including structured-only requests)
-and duplicate canonical IDs before execution. Integer `1` and string `"1"`
-identify the same note; `"001"` remains distinct. Accepted scalar IDs retain
-their types, including primary citations and evidence spans.
-
-### Write a Workbench artifact
-
-Use the thin run-result CLI to execute a case and write the canonical JSON:
+### Save a run artifact
 
 ```bash
 PYTHONPATH=src python -m scripts.run_case_state \
     --notes tests/fixtures/note_bundle.json \
     --output tests/test_outputs/case_state.json
-
-# Retain exchange metadata and usage, but omit model prompts and responses.
-PYTHONPATH=src python -m scripts.run_case_state \
-    --notes tests/fixtures/note_bundle.json \
-    --output tests/test_outputs/case_state.json \
-    --no-llm-content-capture
-
-# Alternatively, retain only a bounded prefix of each prompt message.
-PYTHONPATH=src python -m scripts.run_case_state \
-    --notes tests/fixtures/note_bundle.json \
-    --output tests/test_outputs/case_state.json \
-    --max-content-chars 20000
 ```
 
-New result and failure artifacts use `schema_version: "1.2"`; runtime readers
-accept `1.0`, `1.1`, and `1.2`, as does the Workbench for completed results,
-without recoding historical results.
-The artifact has five domains:
+- `--no-llm-content-capture` drops model prompts and responses but keeps call
+  metadata and token usage.
+- `--max-content-chars N` keeps only the first N characters of each prompt
+  message.
 
-- `run` - run identity, timing, completion status, configuration fingerprint,
-  and `contains_phi`;
-- `case` - the durable clinical output, including variable results, case facts,
-  note-selection provenance, and review flags;
-- `inputs` - configured target groups and caller-supplied structured values;
-- `corpus` - full processed notes, note digests, and corpus descriptors;
-- `observability` - variable attempts, LLM exchanges, capture settings, and
-  provider-reported usage totals and breakdowns.
+A failed run is written as an `OrchestratorRunFailure` and the script exits
+nonzero.
 
-This is the JSON boundary consumed directly by the standalone Workbench. Failed
-runs are serialized by this CLI as `OrchestratorRunFailure` diagnostics and exit
-nonzero; they are not completed Workbench result artifacts.
-
-LLM exchange metadata, retries, errors, variable attempts, and usage collection
-remain enabled when `capture_llm_content=False` or
-`--no-llm-content-capture` is used. Only prompt and parsed response bodies are
-omitted. Prompt capture is unbounded by default. `max_content_chars` or
-`--max-content-chars` optionally limits each retained prompt message and records
-both per-message truncation metadata and the run-level `content_truncated` flag;
-parsed responses are not truncated.
-
-Versions 1.1 and 1.2 require explicit observability `collection_status` (`complete`,
-`partial`, or `unavailable`). They also support typed `collection_issues` and
-`unattributed_exchanges` when a callback cannot be bound to an exact entity/attempt.
-Unavailable usage is `null`, never fabricated zero totals. A missing collection
-status in a legacy artifact
-means it was not recorded. Collection health is separate from provider usage
-coverage. In usage buckets, `logical_calls` counts starts in that bucket; a model
-bucket may have retries but zero starts when a deployment alias resolves to a
-different reported model on retry.
-
-Inherited task callbacks preserve completed sibling scans and repair attribution
-during failure cleanup even when the stream stops delivering events. Failure
-artifacts retain available processed notes, never substitute raw notes with
-default-negative scan results, and never contain a partial clinical `case`.
-
-> **PHI:** Every run artifact is PHI-bearing. Disabling LLM content capture does
-> not de-identify it because `corpus.note_corpus` still contains the full clinical
-> notes. Retained prompts and responses may also contain PHI.
-
-Token usage is provider-reported, not independently calculated. Totals cover the
-invocations for which callbacks expose usage; failed calls and retries internal
-to a provider SDK may not report usage or appear as separate invocations. Check
-`usage_reported_invocations` and `missing_usage_invocations` before treating a
-total as complete. Input/output detail counts, such as cached input or reasoning
-output tokens, are breakdowns of the corresponding totals, not additional
-tokens. The artifact does not estimate monetary cost, retain hidden reasoning,
-or contain a raw graph-event timeline.
-
-Schema 1.2 adds optional invocation fields to both attributed and diagnostic
-exchanges; availability is determined by field presence, not version alone:
-
-- `started_at` / `finished_at` are UTC model callback boundaries, after local
-  permit acquisition, not pre-queue request timestamps.
-- `service_seconds` is monotonic callback duration, including network time and
-  SDK-internal retries/backoff, not pure provider compute or total permit occupancy.
-  Structured calls hold the permit through parsing after the callback ends.
-- `queue_seconds` measures only the local synchronous permit wait, excluding
-  graph scheduling and LangGraph retry backoff. Instrumented unbounded calls can
-  report zero; uninstrumented async/direct paths remain `null`.
-- `usage_reported_fields` lists retained `input_tokens`, `output_tokens`, and/or
-  `total_tokens` verified against provider JSON before SDK coercion or adapter
-  defaulting. Neither callback `token_usage` nor LangChain `usage_metadata` alone
-  proves provenance: the SDK can coerce booleans, strings, and floats, and adapters
-  can fill missing counts or derive totals. `null` means verification unavailable
-  or unrecorded; `[]` means no scalar verified. Verification never replaces normalized
-  counts, and an explicit list missing a required count is authoritative.
-
-`src/cipoc/llm/openai.py` installs narrowly scoped request/response hooks on its
-wrapper-owned default synchronous OpenAI HTTP client. `llm/usage_evidence.py`
-keeps only immutable scalar evidence in a per-call `ContextVar` scope, bound to
-the invocation and request. Non-streaming Chat Completions and Responses support
-verification, including genuine zero counts, without new configuration or
-dependencies. External clients, LangChain's proxy path, async/direct calls, and
-streaming remain unverified (`null`); callback metadata is not a fallback.
-
-The run-result CLI reports derived timing sums, means, maxima, and coverage,
-including diagnostic invocations. Summed invocation time and summed queue wait
-are not run wall time: concurrent sums can exceed it. The Workbench's interval
-union estimates time with an observed model call active, excludes invalid or
-inconsistent wall-clock intervals, and does not measure exclusive model delay.
-Envelope duration can include initialization, cleanup, and the interactive
-summary pause. Collection, provider-usage, scalar-provenance, timing, and cost
-coverage are separate; missing measurements are never assumed zero.
-
-### Run individual agents
+### Export to OMOP
 
 ```bash
-# Scanner demo against tests/fixtures/synthetic_note.json
-PYTHONPATH=src python src/cipoc/agents/note_scanner.py
-
-# Extractor demo against tests/fixtures/note_bundle.json
-PYTHONPATH=src python src/cipoc/agents/extractor.py
+PYTHONPATH=src python -m scripts.export_omop notes.json \
+    --person-id 12345 --output-directory out/12345
+PYTHONPATH=src python -m scripts.merge_omop out/* --output-directory merged
 ```
 
-Each agent's `draw(path=...)` renders its compiled graph to a PNG (falling back
-to ASCII when no network is available); rendered diagrams live under
-`src/cipoc/agents/visualization/`.
+`export_omop` runs a case and writes `note.csv`, `note_nlp.csv`, and
+`omop_errors.json`. `merge_omop` combines the per-patient folders. Rows with
+invalid dates are reported, not defaulted. Both scripts validate everything
+before replacing existing files. Each file is replaced atomically, but the set
+of files is not.
 
-### Smoke checks
+### Run one agent
 
-There is no formal CI. The offline stdlib `unittest` suite covers production
-graphs with deterministic model doubles, validation/scoping, retry/concurrency,
-observability/failure handling, and export boundaries:
+```bash
+PYTHONPATH=src python -m cipoc.agents.note_scanner
+PYTHONPATH=src python -m cipoc.agents.extractor
+```
+
+Both run against `tests/fixtures/note_bundle.json`. Use `-m`, not the file
+path, because the agents use relative imports. `agent.draw(path)` renders an
+agent's graph; saved diagrams are in `src/cipoc/agents/visualization/`.
+
+## Run artifacts
+
+New artifacts use `schema_version` 1.2. The runtime and the Workbench read 1.0
+through 1.2. An artifact has five sections:
+
+- `run`: run ID, timing, status, a config fingerprint (no credentials), and
+  `contains_phi`.
+- `case`: the clinical result, with variable values, case facts, note-selection
+  provenance, and review flags.
+- `inputs`: the requested groups and any caller-supplied values.
+- `corpus`: the full processed notes, their digests, and corpus descriptors.
+- `observability`: per-variable attempts, LLM calls, and provider-reported
+  token usage and timing.
+
+> **Every run artifact contains PHI.** `corpus` holds the full notes even when
+> LLM content capture is off.
+
+Token counts come from the provider; CIPOC doesn't compute them. A count or
+timing that wasn't recorded is `null`, never 0. Field definitions are in
+`src/cipoc/models/run.py` and `src/cipoc/models/observability.py`.
+
+## Workbench
+
+`packages/cipoc-workbench/` is a separate browser app for reviewing run
+artifacts, comparing them with ground truth, and saving reviewer feedback. It
+doesn't depend on the `cipoc` package.
+
+```bash
+python -m pip install ./packages/cipoc-workbench
+cipoc-workbench serve --feedback-dir reviews   # then Load Run… at http://127.0.0.1:8000/
+```
+
+Saved feedback can contain PHI. The
+[Workbench README](packages/cipoc-workbench/README.md) covers the other options.
+
+## Tests
+
+There's no CI. The `unittest` suite runs offline against fake models:
 
 ```bash
 PYTHONPATH=src python -m unittest discover -s tests -t .
 
-# Standalone Workbench tests, from the repository root
+# Workbench
 node --test packages/cipoc-workbench/tests/*.test.js
 PYTHONPATH=packages/cipoc-workbench/src python -m unittest discover \
     -s packages/cipoc-workbench/tests -p 'test_*.py'
 ```
 
-This does not replace native Databricks and live-endpoint smoke checks. A quick
-import/compile check:
-
-```bash
-PYTHONPATH=src python -m py_compile src/cipoc/agents/orchestrator.py
-```
-
-## Site-scoped data dictionary
-
-Variable metadata comes from the NAACCR dictionary configured by
-`documents.data_dictionary_path`. An informative coded primary site selects the
-matching entry in `documents/cipoc_data_dictionary.json`; gross-site inference
-is a fallback only when no primary code was supplied. Unknown, malformed, or
-unsupported primary codes retain base metadata rather than narrowing through
-a conflicting gross site. Unsupported or ambiguous tissue mentions do not
-establish an unambiguous gross site.
-
-The validator understands literal codes and supported fixed-width ranges, checks
-usable type/format constraints, and rejects missing or unsupported validation
-metadata before extraction calls. Clean null answers become `NOT_FOUND`, not
-repair failures. Explicit scoped tables remain authoritative; broad base
-allowable-value declarations do not restore codes excluded by those tables.
-
-Histology and behavior run in the initial stage so dependent applicability can
-use their terminal results. Item 832 targets breast OR (cutaneous site AND
-melanoma histology). Unknown facts keep scope open unless the expression is
-definitively false. Hormonal therapy and immunotherapy are separate scanner
-concepts included in the treatment gate.
-
-These checks enforce supplied storage domains, not the completeness of the
-reference data or all site/year-specific clinical coding rules. In particular,
-the local base item-400 dictionary has gaps in cutaneous topography coverage,
-and item 671's declared ranges are not a complete procedure codebook. Review
-and correct reference data before relying on those cases in production.
-Runtime extraction does not load or compile rules from `documents/rules/`.
-
-### OMOP publication
-
-OMOP rows validate calendar dates and supported ISO datetimes; invalid rows are
-reported rather than silently defaulted. Merging validates CSV syntax, record
-widths, row schemas, IDs, and references before publishing output, and supports
-large multiline note fields. Export and merge stage every file before replacing
-destinations. Replacements are atomic per file on supporting filesystems, not a
-multi-file crash transaction; Databricks filesystem semantics require separate
-deployment verification.
+Passing tests don't replace a live run on Databricks.
 
 ## Repository layout
 
 ```text
 src/cipoc/
-├── agents/
-│   ├── base.py            # BaseAgent: config load, LLM init, graph compile, draw()
-│   ├── note_scanner.py    # NoteScannerAgent: per-note concept/temporality/summary scan
-│   ├── note_retriever.py  # NoteRetrieverAgent: soft-filter notes by relevance to a group
-│   ├── extractor.py       # ExtractorAgent: code + validate a variable group's values
-│   ├── orchestrator.py    # OrchestratorAgent: end-to-end case extraction graph
-│   └── visualization/     # Rendered agent graph PNGs
-├── llm/
-│   ├── base.py            # LLMConfig / BaseAgentModel abstractions
-│   ├── openai.py          # OpenAI-compatible ChatOpenAI wrapper
-│   ├── usage_evidence.py  # Invocation-local pre-SDK scalar evidence
-│   └── retry.py           # RetryPolicy for LLM-backed graph nodes
-├── models/                # Pydantic contracts (see below)
-├── prompts/               # Per-agent prompt strings
-├── tools/
-│   ├── extraction.py      # Data-dictionary lookup + variable value validation
-│   ├── orchestration.py   # Deterministic gating/filtering/roll-up helpers
-│   └── coding_context.py  # Legacy compiled-rule utilities (not used at runtime)
-└── utils/
-    ├── utils.py           # YAML config loader + CipocConfig
-    ├── progress/          # shared graph stream runner + live dashboard
-    └── observability.py   # LLM exchange capture and usage aggregation
-
-deploy/
-├── databricks/          # notebook helpers + endpoint token limits (not part of the package)
-└── foundry_transforms/  # Foundry Python transform and its setup README
-
-packages/
-└── cipoc-workbench/       # Standalone browser-based result review package
-
-config/          # config.yaml + variable_groups.json
-documents/
-├── manuals/     # NAACCR data dictionary + source manuals (gitignored, not in a clone)
-├── markdown/    # markdown-converted manuals the rule compilers read
-├── cipoc_data_dictionary.json  # tissue-keyed code descriptions used at runtime
-└── rules/       # legacy compiled rule store (not used at runtime)
-extract_rules/   # site/histology/coding-rule JSONs and conversion helpers
-scripts/         # run-result, OMOP, graph-rendering, and offline utility CLIs
-planning/        # design notes and MVP plans (planning/old/ = superseded reference)
-tests/fixtures/     # synthetic notes and note bundles for smoke checks
-tests/test_outputs/ # saved outputs from agent demo (__main__) runs
+├── agents/          # orchestrator and the three LLM agents
+├── llm/             # OpenAI-compatible wrapper, retry policy, usage capture
+├── models/          # Pydantic contracts
+├── prompts/         # prompt text for each agent
+├── tools/           # deterministic helpers (coding_context.py is unused)
+├── export/          # OMOP export and merge
+└── utils/           # config loader, observability, terminal progress display
+config/              # config.yaml and variable_groups.json
+deploy/              # Databricks and Foundry code; nothing in src/ imports it
+packages/            # cipoc-workbench review app
+scripts/             # run artifacts, OMOP export, graph rendering (rule_compilation/ is unused)
+extract_rules/       # coding-rule JSONs, not read at runtime
+tests/               # unittest suite; fixtures/ holds synthetic notes
+documents/           # local only (gitignored): data dictionaries and manuals
 ```
 
 ## Data models
 
-Import models from `cipoc.models` rather than redefining schemas in agents or
-tools. Key groups:
+Import models from `cipoc.models` instead of defining new schemas. The main ones:
 
-- **Notes** — `ClinicalNote`, `ProcessedClinicalNote`, `CancerMention`,
-  `CancerStatus`, `NoteDigest`, `NoteCorpusDescriptors`, concept types
-  (`ConceptWithEvidence`, `ConceptPresence`, `TextSpan`).
-- **Variables** — `VariableInfo`, `VariableOutput`, `VariableGroupInfo`,
-  `VariableGroupOutput`, validated variants, and targeting/gating types
-  (`TargetGroup`, `CorpusGate`, `NoteFilter`, `SiteApplicability`).
-- **Scoping** — `CaseFacts` supplies gross and coded primary-site context for
-  selecting tissue-specific data-dictionary values.
-- **Case** — `Case`, `CaseVariableResult`, `VariableStatus`, `CaseReport`,
-  `ReviewFlag`/`ReviewFlagType`.
-- **Observability** — typed model exchanges, variable attempts, normalized token
-  usage, and capture metadata.
-- **Run** — `OrchestratorRunResult`, `OrchestratorRunFailure`,
-  `OrchestratorRunError`, and the versioned run/input/corpus contracts.
+- **Notes:** `ClinicalNote`, `ProcessedClinicalNote`, `CancerMention`,
+  `NoteDigest`, `NoteCorpusDescriptors`
+- **Variables:** `VariableInfo`, `VariableOutput`, `VariableGroupInfo`,
+  `VariableGroupOutput`, `TargetGroup`, `CorpusGate`, `NoteFilter`,
+  `SiteApplicability`
+- **Case:** `Case`, `CaseFacts`, `CaseVariableResult`, `VariableStatus`,
+  `CaseReport`, `ReviewFlag`, `ReviewFlagType`
+- **Run:** `OrchestratorRunResult`, `OrchestratorRunFailure`,
+  `OrchestratorRunError`
