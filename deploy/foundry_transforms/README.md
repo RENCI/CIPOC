@@ -58,7 +58,6 @@ doesn't contain them. Copy them from a machine that has them.
 Copy `src/cipoc/` to `transforms-python/src/cipoc/`, leaving out:
 
 - `agents/visualization/`: rendered graph images and HTML;
-- `utils/databricks_utils.py`: Databricks-only, and nothing else imports it;
 - `__pycache__/` directories.
 
 Keep `utils/progress/`. The orchestrator streams its graph through it even
@@ -69,7 +68,7 @@ From a local clone of the Foundry repository:
 ```bash
 rsync -a --prune-empty-dirs \
     --exclude '__pycache__' --exclude '.DS_Store' \
-    --exclude 'agents/visualization' --exclude 'utils/databricks_utils.py' \
+    --exclude 'agents/visualization' \
     src/cipoc/ /path/to/foundry-repo/transforms-python/src/cipoc/
 ```
 
