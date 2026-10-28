@@ -433,8 +433,11 @@ src/cipoc/
 └── utils/
     ├── utils.py           # YAML config loader + CipocConfig
     ├── progress/          # shared graph stream runner + live dashboard
-    ├── observability.py   # LLM exchange capture and usage aggregation
-    └── databricks_utils.py
+    └── observability.py   # LLM exchange capture and usage aggregation
+
+deploy/
+├── databricks/          # notebook helpers + endpoint token limits (not part of the package)
+└── foundry_transforms/  # Foundry Python transform and its setup README
 
 packages/
 └── cipoc-workbench/       # Standalone browser-based result review package

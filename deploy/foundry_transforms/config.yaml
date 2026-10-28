@@ -1,0 +1,67 @@
+# CIPOC configuration
+#
+# `llm` defines the default LLM settings applied to every agent.
+# `agents` holds optional per-agent overrides; any field set under an agent
+# is merged on top of the defaults in `llm`. Omit an agent (or leave it empty)
+# to have it use the defaults as-is.
+
+# Default LLM configuration (see cipoc.llm.OpenAIConfig).
+llm:
+  model: gpt-5-6-luna
+  provider: openai # "openai" or "anthropic"
+
+  # Credentials / endpoint. Prefer environment variables over hardcoding
+  # secrets here; ${VAR} placeholders are expanded at load time.
+  base_url: http://foundry-models.invalid/v1 # never contacted; the transport answers instead
+  api_key: unused
+
+  # Databricks gpt-oss uses Chat Completions and returns native structured output
+  # in a text content block alongside its reasoning blocks. Compatibility defaults
+  # to "standard" when omitted; opt into "databricks" only for affected endpoints.
+  use_responses_api: false
+  endpoint_compatibility: standard
+  structured_output_method: json_schema
+
+  # Process-wide synchronous per-model cap, shared by live wrappers using the
+  # same model and base URL (scheme/host case, default ports, and SDK-appended
+  # slash normalized), regardless of API key. Paths and queries remain distinct.
+  # Different models at the same URL have independent limits; there is no URL-wide
+  # aggregate cap. Wrappers for the same endpoint/model pair must agree, including
+  # null (unbounded). Positive integers only; 1 is allowed here, unlike graph concurrency.
+  # Async/direct model calls and other processes/Databricks workers are not capped.
+  max_concurrency: 8
+
+  # Reasoning settings (OpenAI-style). Set to null to disable.
+  reasoning:
+    effort: medium # "low", "medium", or "high"
+    summary: auto # "detailed", "auto", or null
+
+  # Retry settings for the LLM-backed graph nodes (langgraph RetryPolicy; see
+  # cipoc.llm.llm_retry_policy). Only transient endpoint failures are retried —
+  # HTTP 429/408/409/5xx and connection errors. Backing off 1s, 2, 4, 8, 16, 32,
+  # 60 over 8 attempts rides out roughly two minutes of throttling.
+  retry:
+    max_attempts: 8
+    initial_interval: 1.0
+    backoff_factor: 2.0
+    max_interval: 60.0
+    jitter: true
+
+# Optional per-agent overrides. Keys are agent names from the `agents` module.
+# Only specify the fields you want to change; everything else falls back to `llm`.
+agents:
+  {}
+  # note_scanner:
+  #   model: gpt-oss-20b
+  #   max_concurrency: 32
+  #   reasoning:
+  #     effort: low
+  #     summary: null
+
+documents:
+  documents_path: ./
+  data_dictionary_path: naaccr_data_dictionary_v25.json
+  site_data_dictionary_path: cipoc_data_dictionary.json
+  variable_groups_path: variable_groups.json
+  # variable_groups_path: initial_extraction_test.json
+  # variable_groups_path: just_primary_site.json

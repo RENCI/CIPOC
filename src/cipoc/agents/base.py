@@ -87,6 +87,9 @@ class BaseAgent(ABC):
         return self._retry_policy
 
     def _initialize_agent_model(self, llm: BaseAgentModel | None = None, **kwargs) -> BaseAgentModel:
+        # Runtime kwargs ride on the shared config so subagents built from an
+        # orchestrator's config receive them too; explicit kwargs win.
+        kwargs = {**self._config.model_kwargs, **kwargs}
         return llm or agent_model_for(self._llm_config.provider)(config=self._llm_config, **kwargs)
     
     def _build_graph(self) -> CompiledStateGraph:

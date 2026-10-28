@@ -56,6 +56,12 @@ DEFAULT_CONFIG_PATH = Path("config/config.yaml")
 
 _ENV_PATTERN = re.compile(r"\$\{([^}]+)\}")
 
+# Runtime-only constructor arguments for every agent's model wrapper. Only
+# objects that cannot live in YAML belong here; settings that shape requests
+# (model, endpoint, capacity) stay in raw config, where the run fingerprint
+# records them.
+RUNTIME_MODEL_KWARGS = frozenset({"http_client"})
+
 
 def _expand_env(value: Any) -> Any:
     """Recursively expand ``${VAR}`` placeholders in strings using os.environ."""
@@ -86,15 +92,35 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 
 class CipocConfig:
-    """Parsed CIPOC configuration with default LLM settings and agent overrides."""
-    def __init__(self, raw: dict):
+    """Parsed CIPOC configuration with default LLM settings and agent overrides.
+
+    ``model_kwargs`` carries runtime-only arguments (see
+    :data:`RUNTIME_MODEL_KWARGS`) handed to every agent's model wrapper,
+    including subagents built from an orchestrator's shared config. Values are
+    shared by reference: never copied, serialized, fingerprinted, or closed here.
+    """
+    def __init__(self, raw: dict, *, model_kwargs: dict[str, Any] | None = None):
+        unsupported = set(model_kwargs or {}) - RUNTIME_MODEL_KWARGS
+        if unsupported:
+            raise ValueError(
+                f"Unsupported runtime model kwargs {sorted(unsupported)}; only "
+                f"{sorted(RUNTIME_MODEL_KWARGS)} are allowed. Put request settings in the config file."
+            )
         self._raw = raw
+        self._model_kwargs: dict[str, Any] = dict(model_kwargs or {})
         self.defaults: dict = raw.get("llm", {}) or {}
         self.agents: dict[str, dict] = raw.get("agents", {}) or {}
         self._documents: dict = raw.get("documents", {}) or {}
 
+    @property
+    def model_kwargs(self) -> dict[str, Any]:
+        """Runtime model-wrapper kwargs; a shallow copy, so values keep their identity."""
+        return dict(self._model_kwargs)
+
     @classmethod
-    def load(cls, path: str | Path | None = None) -> "CipocConfig":
+    def load(
+        cls, path: str | Path | None = None, *, model_kwargs: dict[str, Any] | None = None
+    ) -> "CipocConfig":
         """Load and parse a config file (defaults to ``config/config.yaml``)."""
         path = Path(path) if path is not None else DEFAULT_CONFIG_PATH
         if not path.exists():
@@ -105,7 +131,7 @@ class CipocConfig:
             )
         with open(path, "r") as f:
             raw = yaml.safe_load(f) or {}
-        return cls(_expand_env(raw))
+        return cls(_expand_env(raw), model_kwargs=model_kwargs)
 
     def agent_settings(self, agent: str) -> dict:
         """Return the merged settings dict for ``agent`` (defaults + overrides)."""
@@ -133,9 +159,11 @@ class CipocConfig:
         return DocumentsConfig(**self._documents)
 
 
-def load_config(path: str | Path | None = None) -> CipocConfig:
+def load_config(
+    path: str | Path | None = None, *, model_kwargs: dict[str, Any] | None = None
+) -> CipocConfig:
     """Convenience wrapper around :meth:`CipocConfig.load`."""
-    return CipocConfig.load(path)
+    return CipocConfig.load(path, model_kwargs=model_kwargs)
 
 
 __all__ = [
@@ -143,4 +171,5 @@ __all__ = [
     "DocumentsConfig",
     "load_config",
     "DEFAULT_CONFIG_PATH",
+    "RUNTIME_MODEL_KWARGS",
 ]

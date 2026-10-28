@@ -228,7 +228,7 @@ Rates must be finite and nonnegative; configured zero is valid, null is unknown.
 Names must exactly match recorded models: no deployment aliases, external pricing
 lookups, or guessed defaults. Catalog failure leaves review/feedback usable.
 Pricing is view-time only and never changes runtime config or artifacts.
-`token_limits.yaml` is reference material, not live quota configuration or a source
+`deploy/databricks/token_limits.yaml` is reference material, not live quota configuration or a source
 of model aliases.
 
 Missing rates/usage, invalid or inconsistent counts, unsupported billing details,

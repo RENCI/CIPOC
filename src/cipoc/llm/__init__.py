@@ -3,6 +3,7 @@
 from typing import NamedTuple
 
 from .base import BaseAgentModel, LLMConfig
+from .models_transport import ChatCompletionStatusError, FoundryModelsTransport
 from .openai import OpenAIAgentModel, OpenAIConfig, OpenAIReasoning
 from .retry import (
     DEFAULT_RETRY_SETTINGS,
@@ -52,6 +53,8 @@ def config_for(provider: str | None) -> type[LLMConfig]:
 __all__ = [
     "BaseAgentModel",
     "LLMConfig",
+    "ChatCompletionStatusError",
+    "FoundryModelsTransport",
     "OpenAIAgentModel",
     "OpenAIConfig",
     "OpenAIReasoning",
