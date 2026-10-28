@@ -4,7 +4,6 @@ from typing import Optional, Any, ClassVar, Callable, Iterable
 import pandas as pd
 from pydantic import BaseModel
 
-
 from language_model_service_api.languagemodelservice_api_completion_v3 import (
     GptChatCompletionRequest,
     GptResponseFormat,
@@ -29,6 +28,8 @@ from language_model_service_api.languagemodelservice_api_completion_v3 import (
     FunctionToolCallInfo,
 )
 from language_model_service_api.languagemodelservice_api import ChatMessage, ChatMessageRole, FunctionCall
+
+from cipoc.llm import ChatCompletionStatusError
 
 
 # OpenAI to Foundry request mapping
@@ -55,16 +56,39 @@ TOOL_CHOICE_MODES = {
     "required": GptRequiredToolChoice(),
 }
 
+LEGACY_FUNCTION_FIELDS = ("functions", "function_call")
+
+
+def to_foundry_tool_call(tool_call: dict[str, Any]) -> GptToolCall:
+    return GptToolCall(
+        id=tool_call["id"], tool_call=GptToolCallInfo(function=FunctionToolCallInfo(**tool_call["function"]))
+    )
+
+
+def to_foundry_tool_calls(tool_calls: list[dict[str, Any]] | None) -> list[GptToolCall] | None:
+    if not tool_calls:
+        return
+    return [to_foundry_tool_call(tool_call) for tool_call in tool_calls]
+
+
+def to_foundry_message(message: dict[str, Any]) -> ChatMessage:
+    if message.get("function_call"):
+        raise ChatCompletionStatusError(
+            422, f"The Foundry models API does not accept legacy function calls; use tools instead."
+        )
+    return ChatMessage(
+        **{
+            **message,
+            "role": MESSAGE_ROLES.get((message.get("role") or "").lower(), ChatMessageRole.UNKNOWN),
+            "tool_calls": to_foundry_tool_calls(message.get("tool_calls")),
+        }
+    )
+
 
 def to_foundry_messages(messages: list[dict[str, str]] | None) -> list[ChatMessage]:
     if not messages:
         raise ValueError("No messages present in LLM request.")
-    return [
-        ChatMessage(
-            MESSAGE_ROLES.get(message.get("role", "").lower(), ChatMessageRole.UNKNOWN), message.get("content", "")
-        )
-        for message in messages
-    ]
+    return [to_foundry_message(message) for message in messages]
 
 
 def to_foundry_effort(reasoning_effort: str) -> ReasoningEffort:
@@ -74,25 +98,24 @@ def to_foundry_effort(reasoning_effort: str) -> ReasoningEffort:
 def to_foundry_response_format(response_format: dict[str, Any] | type[BaseModel]) -> GptResponseFormat:
     if not isinstance(response_format, dict):
         response_format = response_format.model_json_schema()
-
     return GptResponseFormat(
         type=GptResponseFormatType.JSON_SCHEMA,
         json_schema=response_format["json_schema"],
     )
 
 
-def to_foundry_tool_choice(tool_choice: str, type_of_union: str | None = None) -> GptToolChoice:
-    if tool_choice.lower() not in TOOL_CHOICE_MODES:
-        tool_choice = GptSpecificToolChoice(GptFunctionToolChoice(tool_choice))
-        tool_choice_mode = "specific"
-    else:
-        tool_choice_mode = TOOL_CHOICE_MODES.get(tool_choice.lower())
+def to_foundry_tool_choice(tool_choice: str | dict[str, Any]) -> GptToolChoice:
+    # OpenAI sends a mode string, or {"type": "function", "function": {"name": ...}} to force one tool.
+    if isinstance(tool_choice, dict):
+        name = tool_choice["function"]["name"]
+        return GptToolChoice(specific=GptSpecificToolChoice(GptFunctionToolChoice(name)))
+    mode = tool_choice.lower()
+    if mode not in TOOL_CHOICE_MODES:
+        raise ValueError(f"Unsupported tool_choice {tool_choice!r}.")
+    return GptToolChoice(**{mode: TOOL_CHOICE_MODES[mode]})
 
-    tool_choice_kwargs = {tool_choice_mode: tool_choice, "type_of_union": type_of_union}
-    return GptToolChoice(**tool_choice_kwargs)
 
-
-def to_foundry_tools(tools: list[dict[str, Any]], type_of_union: str | None = None) -> list[GptTool]:
+def to_foundry_tools(tools: list[dict[str, Any]]) -> list[GptTool]:
     tools = [tool.get("function", tool) for tool in tools]
     return [GptTool(GptFunctionTool(**tool)) for tool in tools]
 
@@ -138,6 +161,11 @@ class FoundryChatArgs:
 
 
 def to_foundry_request(body: dict) -> GptChatCompletionRequest:
+    legacy = [key for key in LEGACY_FUNCTION_FIELDS if body.get(key) is not None]
+    if legacy:
+        raise ChatCompletionStatusError(
+            422, f"The Foundry models API does not accept {legacy}; use tools/tool_choice instead."
+        )
     return FoundryChatArgs.from_openai(body).to_foundry()
 
 
